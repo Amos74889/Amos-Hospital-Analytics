@@ -1,53 +1,104 @@
 from flask import Flask, render_template, request
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
+import plotly.graph_objects as go
+import plotly.io as pio
+
 from models import load_data, train_random_forest, train_arima
-from config import DevelopmentConfig  # <-- Load config
+from config import DevelopmentConfig
 
-# Flask app
 app = Flask(__name__)
-app.config.from_object(DevelopmentConfig)  # <-- Apply config
+app.config.from_object(DevelopmentConfig)
 
-# Ensure plots folder exists
-plots_folder = os.path.join(app.static_folder, "plots")
-os.makedirs(plots_folder, exist_ok=True)
-
-# Load dataset
+# Load dataset once
 data = load_data()
 
-def plot_disease_trends(df):
-    plt.figure(figsize=(10,6))
-    sns.lineplot(x='Date', y='Malaria_Cases', data=df, label='Malaria')
-    sns.lineplot(x='Date', y='Influenza_Cases', data=df, label='Influenza')
-    sns.lineplot(x='Date', y='Respiratory_Infections', data=df, label='Respiratory Infections')
-    plt.title("Disease Trends in Kenya")
-    plt.xlabel("Date")
-    plt.ylabel("Cases")
-    plt.xticks(rotation=45)
 
-    plot_path = os.path.join("plots", "disease_trends.png")  # Relative to static folder
-    plt.tight_layout()
-    plt.savefig(os.path.join(app.static_folder, plot_path))
-    plt.close()
-    return plot_path
+def generate_trend_chart(df):
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["Malaria_Cases"],
+        mode="lines",
+        name="Malaria",
+        line=dict(width=3)
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["Influenza_Cases"],
+        mode="lines",
+        name="Influenza",
+        line=dict(width=3)
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["Respiratory_Infections"],
+        mode="lines",
+        name="Respiratory Infections",
+        line=dict(width=3)
+    ))
+
+    fig.update_layout(
+        template="plotly_white",
+        title="Disease Trends in Kenya",
+        xaxis_title="Date",
+        yaxis_title="Cases",
+        hovermode="x unified",
+        legend=dict(orientation="h"),
+        margin=dict(l=40, r=40, t=60, b=40)
+    )
+
+    return pio.to_html(fig, full_html=False)
+
+
+def generate_pie_chart(df):
+
+    totals = [
+        df["Malaria_Cases"].sum(),
+        df["Influenza_Cases"].sum(),
+        df["Respiratory_Infections"].sum()
+    ]
+
+    fig = go.Figure(data=[go.Pie(
+        labels=["Malaria", "Influenza", "Respiratory"],
+        values=totals,
+        hole=0.5
+    )])
+
+    fig.update_layout(
+        template="plotly_white",
+        title="Case Distribution"
+    )
+
+    return pio.to_html(fig, full_html=False)
+
 
 @app.route("/", methods=["GET", "POST"])
 def index():
+
     results = {}
-    plot_path = plot_disease_trends(data)
 
     if request.method == "POST":
         file = request.files.get("file")
-        if file:
-            data_uploaded = pd.read_csv(file)
-        else:
-            data_uploaded = data
 
-        # Train models
-        rf_result = train_random_forest(data_uploaded)
-        arima_model = train_arima(data_uploaded)
+        if file:
+            df = pd.read_csv(file)
+        else:
+            df = data
+    else:
+        df = data
+
+    # Generate interactive charts
+    trend_chart = generate_trend_chart(df)
+    pie_chart = generate_pie_chart(df)
+
+    # Train models only when POST
+    if request.method == "POST":
+        rf_result = train_random_forest(df)
+        arima_model = train_arima(df)
 
         results = {
             "rf_mae": rf_result.get("MAE", "N/A"),
@@ -55,7 +106,13 @@ def index():
             "arima_summary": arima_model.summary().as_text()
         }
 
-    return render_template("index.html", results=results, plot_path=plot_path)
+    return render_template(
+        "index.html",
+        results=results,
+        trend_chart=trend_chart,
+        pie_chart=pie_chart
+    )
+
 
 if __name__ == "__main__":
     app.run(debug=app.config["DEBUG"])

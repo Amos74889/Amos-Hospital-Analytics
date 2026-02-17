@@ -1,7 +1,9 @@
-Flask
+flask
 pandas
+numpy
 scikit-learn
 statsmodels
 matplotlib
 seaborn
+plotly
 gunicorn

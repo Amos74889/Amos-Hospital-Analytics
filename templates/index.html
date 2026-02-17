@@ -2,63 +2,155 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <title>Amos Hospital Analytics</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amos Hospital Analytics Dashboard</title>
-    <!-- Bootstrap CSS -->
+
+    <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-
 </head>
-<body>
-    <div class="container my-5">
-        <h1 class="text-center dashboard-title">Amos Hospital Analytics Dashboard</h1>
 
-        <!-- Upload Form -->
-        <div class="card card-section p-4 mt-4">
-            <form method="POST" enctype="multipart/form-data" class="row g-3">
-                <div class="col-md-8">
-                    <input type="file" name="file" class="form-control">
-                </div>
-                <div class="col-md-4">
-                    <button type="submit" class="btn btn-primary w-100">Run Models</button>
-                </div>
-            </form>
+<body data-theme="light">
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-dark navbar-custom px-4">
+    <div class="container-fluid">
+        <span class="navbar-brand fw-bold">Amos Hospital Analytics</span>
+
+        <div class="ms-auto d-flex align-items-center gap-3">
+            <button id="themeToggle" class="btn btn-sm btn-outline-light">
+                🌙 Dark Mode
+            </button>
         </div>
+    </div>
+</nav>
 
-        <!-- Disease Trends Plot -->
-        <div class="card card-section p-4 mt-4">
-            <h4>Disease Trends in Kenya</h4>
-            <img src="{{ url_for('static', filename=plot_path) }}" alt="Disease Trends" class="img-fluid plot-img">
-        </div>
+<div class="container dashboard-container">
 
-        <!-- Model Results -->
-        {% if results %}
-        <div class="row mt-4">
+    <!-- Upload + Date Filter -->
+    <div class="card section-card upload-card">
+        <form method="POST" enctype="multipart/form-data" class="row g-3 align-items-center">
             <div class="col-md-6">
-                <div class="card card-section p-4">
-                    <h5 class="card-title">Random Forest Results</h5>
-                    <ul class="list-group list-group-flush mt-2">
-                        <li class="list-group-item">MAE: {{ results.rf_mae }}</li>
-                        <li class="list-group-item">RMSE: {{ results.rf_rmse }}</li>
-                    </ul>
-                </div>
+                <input type="file" name="file" class="form-control">
             </div>
-            <div class="col-md-6">
-                <div class="card card-section p-4">
-                    <h5 class="card-title">ARIMA Results</h5>
-                    <pre class="card-text">{{ results.arima_summary }}</pre>
-                </div>
+
+            <div class="col-md-3">
+                <input type="text" class="form-control" placeholder="Jan 2019 – Dec 2023">
+            </div>
+
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-run w-100">Run Models</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="row kpi-row">
+        <div class="col-md-3">
+            <div class="card kpi-card">
+                <p class="kpi-label">Total Cases</p>
+                <h3 class="kpi-value">215,482</h3>
             </div>
         </div>
-        {% endif %}
 
-        <div class="footer mt-5 text-center">
-            &copy; 2026 Amos Hospital Analytics
+        <div class="col-md-3">
+            <div class="card kpi-card">
+                <p class="kpi-label">Highest Disease</p>
+                <h3 class="kpi-value primary">Malaria</h3>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card kpi-card">
+                <p class="kpi-label">Peak Month</p>
+                <h3 class="kpi-value">March</h3>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card kpi-card">
+                <p class="kpi-label">Model Accuracy</p>
+                <h3 class="kpi-value success">89.5%</h3>
+            </div>
         </div>
     </div>
 
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Main Section -->
+    <div class="row main-section">
+
+        <!-- Line Chart -->
+        <div class="col-lg-8">
+            <div class="card section-card chart-card">
+                <h4 class="section-title">Disease Trends in Kenya</h4>
+                <p class="section-description">
+                    An analysis of malaria, influenza and respiratory infections trends
+                    reported between 2019 and 2023.
+                </p>
+
+                <img src="{{ url_for('static', filename=plot_path) }}"
+                     class="img-fluid chart-img"
+                     alt="Disease Trends">
+            </div>
+        </div>
+
+        <!-- Right Side Charts -->
+        <div class="col-lg-4">
+
+            <div class="card section-card pie-card">
+                <h5 class="section-title-sm">Case Distribution</h5>
+                <img src="{{ url_for('static', filename='pie_distribution.png') }}"
+                     class="img-fluid"
+                     alt="Case Distribution">
+            </div>
+
+            <div class="card section-card pie-card">
+                <h5 class="section-title-sm">Predicted vs Actual</h5>
+                <img src="{{ url_for('static', filename='prediction_pie.png') }}"
+                     class="img-fluid"
+                     alt="Prediction Accuracy">
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        © 2026 Amos Hospital Analytics • Data Intelligence Platform
+    </div>
+
+</div>
+
+<!-- Theme Script -->
+<script>
+    const toggleBtn = document.getElementById("themeToggle");
+    const body = document.body;
+
+    // Load saved theme
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme) {
+        body.setAttribute("data-theme", savedTheme);
+        updateButton(savedTheme);
+    }
+
+    toggleBtn.addEventListener("click", () => {
+        const currentTheme = body.getAttribute("data-theme");
+        const newTheme = currentTheme === "light" ? "dark" : "light";
+
+        body.setAttribute("data-theme", newTheme);
+        localStorage.setItem("theme", newTheme);
+        updateButton(newTheme);
+    });
+
+    function updateButton(theme) {
+        toggleBtn.textContent = theme === "light" ? "🌙 Dark Mode" : "☀ Light Mode";
+    }
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

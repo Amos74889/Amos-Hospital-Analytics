@@ -8,6 +8,9 @@
     <!-- Bootstrap -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 
+    <!-- Plotly CDN (REQUIRED) -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
     <!-- Google Font -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
@@ -32,7 +35,7 @@
 
 <div class="container dashboard-container">
 
-    <!-- Upload + Date Filter -->
+    <!-- Upload -->
     <div class="card section-card upload-card">
         <form method="POST" enctype="multipart/form-data" class="row g-3 align-items-center">
             <div class="col-md-6">
@@ -49,74 +52,45 @@
         </form>
     </div>
 
-    <!-- KPI Cards -->
-    <div class="row kpi-row">
-        <div class="col-md-3">
-            <div class="card kpi-card">
-                <p class="kpi-label">Total Cases</p>
-                <h3 class="kpi-value">215,482</h3>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card kpi-card">
-                <p class="kpi-label">Highest Disease</p>
-                <h3 class="kpi-value primary">Malaria</h3>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card kpi-card">
-                <p class="kpi-label">Peak Month</p>
-                <h3 class="kpi-value">March</h3>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card kpi-card">
-                <p class="kpi-label">Model Accuracy</p>
-                <h3 class="kpi-value success">89.5%</h3>
-            </div>
-        </div>
-    </div>
-
     <!-- Main Section -->
     <div class="row main-section">
 
-        <!-- Line Chart -->
+        <!-- Trend Chart -->
         <div class="col-lg-8">
             <div class="card section-card chart-card">
                 <h4 class="section-title">Disease Trends in Kenya</h4>
                 <p class="section-description">
-                    An analysis of malaria, influenza and respiratory infections trends
-                    reported between 2019 and 2023.
+                    Interactive analysis of malaria, influenza and respiratory infections trends.
                 </p>
 
-                <img src="{{ url_for('static', filename=plot_path) }}"
-                     class="img-fluid chart-img"
-                     alt="Disease Trends">
+                <!-- 🔥 Render Plotly Chart -->
+                {{ trend_chart|safe }}
             </div>
         </div>
 
-        <!-- Right Side Charts -->
+        <!-- Pie Chart -->
         <div class="col-lg-4">
-
             <div class="card section-card pie-card">
                 <h5 class="section-title-sm">Case Distribution</h5>
-                <img src="{{ url_for('static', filename='pie_distribution.png') }}"
-                     class="img-fluid"
-                     alt="Case Distribution">
-            </div>
 
-            <div class="card section-card pie-card">
-                <h5 class="section-title-sm">Predicted vs Actual</h5>
-                <img src="{{ url_for('static', filename='prediction_pie.png') }}"
-                     class="img-fluid"
-                     alt="Prediction Accuracy">
+                <!-- 🔥 Render Plotly Pie -->
+                {{ pie_chart|safe }}
             </div>
-
         </div>
+
     </div>
+
+    <!-- Model Results -->
+    {% if results %}
+    <div class="card section-card mt-4">
+        <h5 class="section-title-sm">Model Results</h5>
+
+        <p><strong>Random Forest MAE:</strong> {{ results.rf_mae }}</p>
+        <p><strong>Random Forest RMSE:</strong> {{ results.rf_rmse }}</p>
+
+        <pre style="white-space: pre-wrap;">{{ results.arima_summary }}</pre>
+    </div>
+    {% endif %}
 
     <!-- Footer -->
     <div class="footer">
@@ -130,7 +104,6 @@
     const toggleBtn = document.getElementById("themeToggle");
     const body = document.body;
 
-    // Load saved theme
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme) {
         body.setAttribute("data-theme", savedTheme);

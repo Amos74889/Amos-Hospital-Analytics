@@ -15,7 +15,8 @@ app = Flask(__name__)
 # DEFAULT SAMPLE DATA
 # ===============================
 def get_data():
-    dates = pd.date_range(start="2019-01-01", periods=60, freq="M")
+    # 🔥 FIXED HERE → changed M to ME
+    dates = pd.date_range(start="2019-01-01", periods=60, freq="ME")
 
     data = {
         "date": dates,
@@ -36,7 +37,6 @@ def generate_trend_chart(df):
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
     plt.figure(figsize=(10, 5))
-
     plt.plot(df["date"], df["malaria_cases"], label="Malaria")
     plt.plot(df["date"], df["influenza_cases"], label="Influenza")
     plt.plot(df["date"], df["respiratory_infections"], label="Respiratory")
@@ -57,8 +57,6 @@ def generate_trend_chart(df):
 # PIE CHART
 # ===============================
 def generate_pie_chart(df):
-
-    df = df.copy()
 
     totals = [
         df["malaria_cases"].sum(),
@@ -85,7 +83,6 @@ def generate_prediction_chart(df):
 
     df = df.copy()
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
     df["month"] = df["date"].dt.month
 
     X = df[["month"]]
@@ -125,14 +122,12 @@ def index():
     else:
         df = get_data()
 
-    # Normalize column names
     df.columns = df.columns.str.strip().str.lower()
 
-    # 🔥 FORCE date column to datetime AFTER normalization
-    if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    else:
-        return "Error: CSV must contain a 'date' column"
+    if "date" not in df.columns:
+        return "CSV must contain a 'date' column"
+
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
 
     # Generate charts
     trend_chart = generate_trend_chart(df)

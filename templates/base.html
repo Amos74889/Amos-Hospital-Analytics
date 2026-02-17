@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Disease Analytics Dashboard</title>
+
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<nav style="background:#0f172a;padding:20px;color:white;">
+    <h2>DiseaseAI Dashboard</h2>
+</nav>
+
+<div style="padding:20px;">
+    {% block content %}{% endblock %}
+</div>
+
+</body>
+</html>

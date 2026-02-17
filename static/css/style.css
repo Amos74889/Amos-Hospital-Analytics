@@ -52,7 +52,7 @@ input[type="file"] {
 /* Disease Trend Plot */
 .plot-img {
     width: 100%;
-    max-height: 450px;
+    max-height: 200px;
     border-radius: 12px;
     border: 2px solid #1f618d;
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);

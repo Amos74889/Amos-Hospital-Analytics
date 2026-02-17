@@ -1,168 +1,133 @@
 import os
 import numpy as np
 import pandas as pd
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
-from flask import Flask, render_template, request
+from flask import Flask, render_template
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score
+import plotly.express as px
+import plotly.graph_objects as go
 
 app = Flask(__name__)
 
+# -----------------------------
+# Generate Sample Hospital Data
+# -----------------------------
+def generate_data():
+    np.random.seed(42)
 
-# ===============================
-# DEFAULT SAMPLE DATA
-# ===============================
-def get_data():
-    # 🔥 FIXED HERE → changed M to ME
-    dates = pd.date_range(start="2019-01-01", periods=60, freq="ME")
+    # IMPORTANT: Using "ME" (Month End) for new pandas versions
+    dates = pd.date_range(start="2022-01-01", periods=24, freq="ME")
 
-    data = {
-        "date": dates,
-        "malaria_cases": np.random.randint(100, 500, 60),
-        "influenza_cases": np.random.randint(50, 300, 60),
-        "respiratory_infections": np.random.randint(80, 400, 60),
-    }
+    df = pd.DataFrame({
+        "Date": dates,
+        "Malaria": np.random.randint(500, 1200, 24),
+        "Influenza": np.random.randint(200, 800, 24),
+        "Respiratory": np.random.randint(400, 1000, 24),
+    })
 
-    return pd.DataFrame(data)
-
-
-# ===============================
-# TREND CHART
-# ===============================
-def generate_trend_chart(df):
-
-    df = df.copy()
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-    plt.figure(figsize=(10, 5))
-    plt.plot(df["date"], df["malaria_cases"], label="Malaria")
-    plt.plot(df["date"], df["influenza_cases"], label="Influenza")
-    plt.plot(df["date"], df["respiratory_infections"], label="Respiratory")
-
-    plt.legend()
-    plt.xticks(rotation=45)
-
-    os.makedirs("static", exist_ok=True)
-
-    path = "static/trend_chart.png"
-    plt.savefig(path, bbox_inches="tight")
-    plt.close()
-
-    return "trend_chart.png"
+    return df
 
 
-# ===============================
-# PIE CHART
-# ===============================
-def generate_pie_chart(df):
+# -----------------------------
+# Main Dashboard Route
+# -----------------------------
+@app.route("/")
+def dashboard():
 
-    totals = [
-        df["malaria_cases"].sum(),
-        df["influenza_cases"].sum(),
-        df["respiratory_infections"].sum()
-    ]
+    df = generate_data()
 
-    labels = ["Malaria", "Influenza", "Respiratory"]
+    # -----------------------------
+    # KPI Calculations
+    # -----------------------------
+    total_cases = int(df[["Malaria", "Influenza", "Respiratory"]].sum().sum())
+    disease_totals = df[["Malaria", "Influenza", "Respiratory"]].sum()
+    highest_disease = disease_totals.idxmax()
+    peak_month = df.loc[df["Malaria"].idxmax(), "Date"].strftime("%B")
 
-    plt.figure()
-    plt.pie(totals, labels=labels, autopct="%1.1f%%")
+    # -----------------------------
+    # Machine Learning Model
+    # -----------------------------
+    df["Month"] = df["Date"].dt.month
 
-    path = "static/pie_chart.png"
-    plt.savefig(path, bbox_inches="tight")
-    plt.close()
+    X = df[["Month"]]
+    y = df["Malaria"]
 
-    return "pie_chart.png"
-
-
-# ===============================
-# PREDICTION CHART
-# ===============================
-def generate_prediction_chart(df):
-
-    df = df.copy()
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df["month"] = df["date"].dt.month
-
-    X = df[["month"]]
-    y = df["malaria_cases"]
-
-    model = RandomForestRegressor()
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
     model.fit(X, y)
 
     predictions = model.predict(X)
+    accuracy = round(r2_score(y, predictions) * 100, 2)
 
-    plt.figure(figsize=(8, 4))
-    plt.plot(df["date"], y, label="Actual")
-    plt.plot(df["date"], predictions, label="Predicted")
+    # -----------------------------
+    # Charts
+    # -----------------------------
 
-    plt.legend()
+    # Trend Chart
+    trend_fig = px.line(
+        df,
+        x="Date",
+        y=["Malaria", "Influenza", "Respiratory"],
+        markers=True,
+        title="Disease Trends Over Time"
+    )
+    trend_fig.update_layout(template="plotly_white")
+    trend_chart = trend_fig.to_html(full_html=False, include_plotlyjs=False)
 
-    path = "static/prediction_chart.png"
-    plt.savefig(path, bbox_inches="tight")
-    plt.close()
+    # Pie Chart
+    pie_fig = px.pie(
+        names=disease_totals.index,
+        values=disease_totals.values,
+        hole=0.5,
+        title="Disease Distribution"
+    )
+    pie_fig.update_layout(template="plotly_white")
+    pie_chart = pie_fig.to_html(full_html=False, include_plotlyjs=False)
 
-    return "prediction_chart.png"
+    # Prediction Chart
+    pred_fig = go.Figure()
+    pred_fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=y,
+        mode="lines+markers",
+        name="Actual"
+    ))
+    pred_fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=predictions,
+        mode="lines+markers",
+        name="Predicted"
+    ))
+    pred_fig.update_layout(
+        title="Malaria Prediction vs Actual",
+        template="plotly_white"
+    )
+    prediction_chart = pred_fig.to_html(full_html=False, include_plotlyjs=False)
 
-
-# ===============================
-# MAIN ROUTE
-# ===============================
-@app.route("/", methods=["GET", "POST"])
-def index():
-
-    if request.method == "POST":
-        file = request.files.get("file")
-
-        if file and file.filename != "":
-            df = pd.read_csv(file)
-        else:
-            df = get_data()
-    else:
-        df = get_data()
-
-    df.columns = df.columns.str.strip().str.lower()
-
-    if "date" not in df.columns:
-        return "CSV must contain a 'date' column"
-
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-    # Generate charts
-    trend_chart = generate_trend_chart(df)
-    pie_chart = generate_pie_chart(df)
-    prediction_chart = generate_prediction_chart(df)
-
-    # KPIs
-    total_cases = (
-        df["malaria_cases"].sum() +
-        df["influenza_cases"].sum() +
-        df["respiratory_infections"].sum()
+    # Data Table
+    table_html = df.to_html(
+        classes="table table-hover table-striped",
+        index=False
     )
 
-    disease_totals = {
-        "Malaria": df["malaria_cases"].sum(),
-        "Influenza": df["influenza_cases"].sum(),
-        "Respiratory": df["respiratory_infections"].sum(),
-    }
-
-    highest_disease = max(disease_totals, key=disease_totals.get)
-    peak_month = df.loc[df["malaria_cases"].idxmax(), "date"].strftime("%B")
-
-    accuracy = 89.5
-
+    # -----------------------------
+    # Render Template
+    # -----------------------------
     return render_template(
         "index.html",
+        total_cases=f"{total_cases:,}",
+        highest_disease=highest_disease,
+        peak_month=peak_month,
+        accuracy=accuracy,
         trend_chart=trend_chart,
         pie_chart=pie_chart,
         prediction_chart=prediction_chart,
-        total_cases=total_cases,
-        highest_disease=highest_disease,
-        peak_month=peak_month,
-        accuracy=accuracy
+        data_table=table_html
     )
 
 
+# -----------------------------
+# Run Application
+# -----------------------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)

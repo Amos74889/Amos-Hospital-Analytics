@@ -1,72 +1,64 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="dashboard">
+<div class="row g-4 mb-4">
 
-    <!-- ===== TOP HEADER ===== -->
-    <div class="dashboard-header">
-        <div>
-            <h1>Disease Analytics Dashboard</h1>
-            <p>AI-powered disease monitoring & prediction system</p>
+    <div class="col-md-3">
+        <div class="kpi-card">
+            <small>Total Cases</small>
+            <h3>{{ total_cases }}</h3>
         </div>
     </div>
 
-
-    <!-- ===== KPI CARDS ===== -->
-    <div class="kpi-grid">
-
+    <div class="col-md-3">
         <div class="kpi-card">
-            <div class="kpi-title">Total Cases</div>
-            <div class="kpi-value">{{ total_cases }}</div>
+            <small>Highest Disease</small>
+            <h3>{{ highest_disease }}</h3>
         </div>
-
-        <div class="kpi-card">
-            <div class="kpi-title">Highest Disease</div>
-            <div class="kpi-value highlight">{{ highest_disease }}</div>
-        </div>
-
-        <div class="kpi-card">
-            <div class="kpi-title">Peak Month</div>
-            <div class="kpi-value">{{ peak_month }}</div>
-        </div>
-
-        <div class="kpi-card">
-            <div class="kpi-title">R² Score</div>
-            <div class="kpi-value">{{ r2 }}</div>
-        </div>
-
-        <div class="kpi-card">
-            <div class="kpi-title">MAE</div>
-            <div class="kpi-value">{{ mae }}</div>
-        </div>
-
-        <div class="kpi-card">
-            <div class="kpi-title">RMSE</div>
-            <div class="kpi-value">{{ rmse }}</div>
-        </div>
-
     </div>
 
-
-    <!-- ===== MAIN TREND CHART ===== -->
-    <div class="chart-card large-chart">
-        {{ trend_chart | safe }}
+    <div class="col-md-3">
+        <div class="kpi-card">
+            <small>Peak Month</small>
+            <h3>{{ peak_month }}</h3>
+        </div>
     </div>
 
+    <div class="col-md-3">
+        <div class="kpi-card">
+            <small>Model Accuracy</small>
+            <h3>{{ accuracy }}%</h3>
+        </div>
+    </div>
 
-    <!-- ===== BOTTOM GRID ===== -->
-    <div class="bottom-grid">
+</div>
 
-        <div class="chart-card">
+<div class="row g-4">
+
+    <div class="col-lg-8">
+        <div class="glass-card p-4">
+            <h5>Disease Trends</h5>
+            {{ trend_chart | safe }}
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="glass-card p-4 mb-4">
+            <h5>Distribution</h5>
             {{ pie_chart | safe }}
         </div>
 
-        <div class="chart-card">
+        <div class="glass-card p-4">
+            <h5>Predictions</h5>
             {{ prediction_chart | safe }}
         </div>
-
     </div>
 
+</div>
+
+<div class="glass-card p-4 mt-4">
+    <h5>Dataset</h5>
+    {{ data_table | safe }}
 </div>
 
 {% endblock %}

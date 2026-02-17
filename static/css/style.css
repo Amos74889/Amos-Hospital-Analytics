@@ -1,142 +1,53 @@
-/* ===============================
-   GLOBAL STYLING
-=================================*/
-
 body {
-    background: linear-gradient(135deg, #eef3f9, #f8fbff);
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-    color: #2c3e50;
+    background: linear-gradient(135deg, #eef3f9, #f7fbff);
+    font-family: "Segoe UI", sans-serif;
 }
-
-/* ===============================
-   NAVBAR
-=================================*/
 
 .navbar {
-    background: linear-gradient(90deg, #1e3c72, #2a5298) !important;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-}
-
-.navbar-brand {
-    font-size: 18px;
-    letter-spacing: 0.5px;
-}
-
-/* ===============================
-   GLASS CARD (Used in filters + tabs)
-=================================*/
-
-.glass-card {
-    background: rgba(255, 255, 255, 0.75);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-radius: 18px;
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.4);
-}
-
-/* ===============================
-   FILTER BAR
-=================================*/
-
-.glass-card label {
-    font-weight: 500;
-    font-size: 14px;
-    margin-bottom: 5px;
-}
-
-.form-select {
-    border-radius: 10px;
-    border: 1px solid #dce3f0;
-    box-shadow: none;
-}
-
-.form-select:focus {
-    border-color: #2a5298;
-    box-shadow: 0 0 0 0.15rem rgba(42, 82, 152, 0.2);
-}
-
-.btn-primary {
     background: linear-gradient(90deg, #1e3c72, #2a5298);
-    border: none;
-    border-radius: 10px;
+}
+
+.sidebar {
+    background: white;
+    min-height: 100vh;
+    border-right: 1px solid #e3e6f0;
+}
+
+.sidebar .nav-link {
+    color: #2c3e50;
     font-weight: 500;
 }
 
-.btn-primary:hover {
-    opacity: 0.9;
+.sidebar .nav-link.active {
+    color: #2a5298;
 }
-
-/* ===============================
-   KPI CARDS
-=================================*/
 
 .kpi-card {
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(10px);
-    border-radius: 16px;
+    background: white;
+    border-radius: 15px;
     padding: 20px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
-    transition: all 0.3s ease;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.05);
+    transition: 0.3s ease;
 }
 
 .kpi-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+    transform: translateY(-5px);
 }
 
 .kpi-card small {
-    font-size: 13px;
     color: #6c757d;
 }
 
 .kpi-card h3 {
-    margin-top: 6px;
+    margin-top: 5px;
     font-weight: 600;
     color: #1e3c72;
 }
 
-/* ===============================
-   NAV TABS
-=================================*/
-
-.nav-tabs {
-    border-bottom: 2px solid #dee2e6;
-}
-
-.nav-tabs .nav-link {
-    border: none;
-    color: #495057;
-    font-weight: 500;
-    border-radius: 8px 8px 0 0;
-}
-
-.nav-tabs .nav-link.active {
-    background-color: white;
-    border-bottom: 3px solid #2a5298;
-    color: #2a5298;
-    font-weight: 600;
-}
-
-.nav-tabs .nav-link:hover {
-    background-color: #f1f4f9;
-}
-
-/* ===============================
-   TAB CONTENT AREA
-=================================*/
-
-.tab-content {
-    margin-top: 10px;
-}
-
-/* ===============================
-   TABLE STYLING
-=================================*/
-
-.table {
-    margin-top: 10px;
-    font-size: 14px;
+.glass-card {
+    background: rgba(255,255,255,0.9);
+    border-radius: 20px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.06);
 }
 
 .table th {
@@ -147,28 +58,4 @@ body {
 
 .table td {
     text-align: center;
-}
-
-/* ===============================
-   PLOTLY CONTAINER FIX
-=================================*/
-
-.js-plotly-plot {
-    width: 100% !important;
-}
-
-/* ===============================
-   RESPONSIVE IMPROVEMENTS
-=================================*/
-
-@media (max-width: 768px) {
-
-    .kpi-card {
-        text-align: center;
-    }
-
-    .glass-card {
-        padding: 20px !important;
-    }
-
 }

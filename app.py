@@ -1,133 +1,261 @@
 import os
-import numpy as np
 import pandas as pd
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, url_for, flash
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import (
+    LoginManager,
+    UserMixin,
+    login_user,
+    login_required,
+    logout_user,
+    current_user
+)
+from werkzeug.security import generate_password_hash, check_password_hash
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score
 import plotly.express as px
-import plotly.graph_objects as go
+
+# -------------------------------------------------
+# APP CONFIGURATION
+# -------------------------------------------------
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "super-secret-key")
 
-# -----------------------------
-# Generate Sample Hospital Data
-# -----------------------------
-def generate_data():
-    np.random.seed(42)
+database_url = os.environ.get("DATABASE_URL", "sqlite:///local.db")
 
-    # IMPORTANT: Using "ME" (Month End) for new pandas versions
-    dates = pd.date_range(start="2022-01-01", periods=24, freq="ME")
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://")
 
-    df = pd.DataFrame({
-        "Date": dates,
-        "Malaria": np.random.randint(500, 1200, 24),
-        "Influenza": np.random.randint(200, 800, 24),
-        "Respiratory": np.random.randint(400, 1000, 24),
-    })
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    return df
+db = SQLAlchemy(app)
+
+# -------------------------------------------------
+# LOGIN MANAGER
+# -------------------------------------------------
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
+login_manager.login_message = "Please log in first."
+
+# -------------------------------------------------
+# MODELS
+# -------------------------------------------------
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.String(255), nullable=False)
 
 
-# -----------------------------
-# Main Dashboard Route
-# -----------------------------
-@app.route("/")
+# ✅ DYNAMIC METRIC MODEL
+class HospitalMetric(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False)
+    metric_name = db.Column(db.String(120), nullable=False)
+    metric_value = db.Column(db.Float, nullable=False)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
+
+
+# -------------------------------------------------
+# AUTH ROUTES
+# -------------------------------------------------
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = generate_password_hash(request.form["password"])
+
+        if User.query.filter_by(username=username).first():
+            flash("Username already exists.")
+            return redirect(url_for("register"))
+
+        new_user = User(username=username, password=password)
+        db.session.add(new_user)
+        db.session.commit()
+
+        flash("Account created. Please login.")
+        return redirect(url_for("login"))
+
+    return render_template("register.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+
+        user = User.query.filter_by(username=username).first()
+
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for("dashboard"))
+        else:
+            flash("Invalid username or password.")
+
+    return render_template("login.html")
+
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+
+
+# -------------------------------------------------
+# DASHBOARD (DYNAMIC ENGINE)
+# -------------------------------------------------
+
+@app.route("/", methods=["GET", "POST"])
+@login_required
 def dashboard():
 
-    df = generate_data()
+    # ---------------- FILE UPLOAD ----------------
+    if request.method == "POST":
+        file = request.files.get("file")
 
-    # -----------------------------
-    # KPI Calculations
-    # -----------------------------
-    total_cases = int(df[["Malaria", "Influenza", "Respiratory"]].sum().sum())
-    disease_totals = df[["Malaria", "Influenza", "Respiratory"]].sum()
-    highest_disease = disease_totals.idxmax()
-    peak_month = df.loc[df["Malaria"].idxmax(), "Date"].strftime("%B")
+        if not file:
+            flash("No file selected.")
+            return redirect(url_for("dashboard"))
 
-    # -----------------------------
-    # Machine Learning Model
-    # -----------------------------
-    df["Month"] = df["Date"].dt.month
+        try:
+            df = pd.read_csv(file)
+            df.columns = df.columns.str.strip()
 
-    X = df[["Month"]]
-    y = df["Malaria"]
+            # Detect date column automatically
+            date_column = None
+            for col in df.columns:
+                if "date" in col.lower():
+                    date_column = col
+                    break
 
-    model = RandomForestRegressor(n_estimators=50, random_state=42)
+            if not date_column:
+                flash("No date column detected.")
+                return redirect(url_for("dashboard"))
+
+            df[date_column] = pd.to_datetime(df[date_column], errors="coerce")
+
+            # Clear old data
+            HospitalMetric.query.delete()
+
+            # Store dynamically
+            for _, row in df.iterrows():
+                for col in df.columns:
+                    if col == date_column:
+                        continue
+
+                    if pd.api.types.is_numeric_dtype(df[col]):
+                        metric = HospitalMetric(
+                            date=row[date_column],
+                            metric_name=col,
+                            metric_value=row[col]
+                        )
+                        db.session.add(metric)
+
+            db.session.commit()
+            flash("Hospital data uploaded and analyzed successfully.")
+
+        except Exception as e:
+            flash(f"Upload error: {str(e)}")
+
+        return redirect(url_for("dashboard"))
+
+    # ---------------- ANALYSIS ----------------
+
+    records = HospitalMetric.query.all()
+
+    if not records:
+        return render_template("dashboard.html", message="No data uploaded yet.")
+
+    df = pd.DataFrame([{
+        "date": r.date,
+        "metric": r.metric_name,
+        "value": r.metric_value
+    } for r in records])
+
+    total_cases = int(df["value"].sum())
+
+    top_metric = (
+        df.groupby("metric")["value"]
+        .sum()
+        .sort_values(ascending=False)
+        .index[0]
+    )
+
+    # Prepare grouped data
+    df_grouped = df.groupby(["date", "metric"])["value"].sum().reset_index()
+    df_grouped["MonthIndex"] = df_grouped.groupby("metric").cumcount() + 1
+
+    # ML forecast only top metric
+    top_df = df_grouped[df_grouped["metric"] == top_metric]
+
+    X = top_df[["MonthIndex"]]
+    y = top_df["value"]
+
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X, y)
 
     predictions = model.predict(X)
     accuracy = round(r2_score(y, predictions) * 100, 2)
 
-    # -----------------------------
-    # Charts
-    # -----------------------------
+    future_df = pd.DataFrame({
+        "MonthIndex": range(len(top_df) + 1, len(top_df) + 7)
+    })
 
-    # Trend Chart
+    forecast = model.predict(future_df)
+
+    # Trend chart
     trend_fig = px.line(
-        df,
-        x="Date",
-        y=["Malaria", "Influenza", "Respiratory"],
-        markers=True,
-        title="Disease Trends Over Time"
+        df_grouped,
+        x="date",
+        y="value",
+        color="metric",
+        title="Hospital Metrics Trend"
     )
-    trend_fig.update_layout(template="plotly_white")
-    trend_chart = trend_fig.to_html(full_html=False, include_plotlyjs=False)
+    trend_chart = trend_fig.to_html(full_html=False)
 
-    # Pie Chart
-    pie_fig = px.pie(
-        names=disease_totals.index,
-        values=disease_totals.values,
-        hole=0.5,
-        title="Disease Distribution"
+    # Forecast chart
+    forecast_fig = px.line(
+        x=list(range(1, 7)),
+        y=forecast,
+        labels={"x": "Next 6 Months", "y": f"Forecasted {top_metric}"},
+        title=f"6-Month Forecast for {top_metric}"
     )
-    pie_fig.update_layout(template="plotly_white")
-    pie_chart = pie_fig.to_html(full_html=False, include_plotlyjs=False)
+    forecast_chart = forecast_fig.to_html(full_html=False)
 
-    # Prediction Chart
-    pred_fig = go.Figure()
-    pred_fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=y,
-        mode="lines+markers",
-        name="Actual"
-    ))
-    pred_fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=predictions,
-        mode="lines+markers",
-        name="Predicted"
-    ))
-    pred_fig.update_layout(
-        title="Malaria Prediction vs Actual",
-        template="plotly_white"
-    )
-    prediction_chart = pred_fig.to_html(full_html=False, include_plotlyjs=False)
-
-    # Data Table
-    table_html = df.to_html(
-        classes="table table-hover table-striped",
-        index=False
-    )
-
-    # -----------------------------
-    # Render Template
-    # -----------------------------
     return render_template(
-        "index.html",
-        total_cases=f"{total_cases:,}",
-        highest_disease=highest_disease,
-        peak_month=peak_month,
+        "dashboard.html",
+        total_cases=total_cases,
+        top_disease=top_metric,
         accuracy=accuracy,
         trend_chart=trend_chart,
-        pie_chart=pie_chart,
-        prediction_chart=prediction_chart,
-        data_table=table_html
+        forecast_chart=forecast_chart
     )
 
 
-# -----------------------------
-# Run Application
-# -----------------------------
+# -------------------------------------------------
+# INITIALIZE DATABASE
+# -------------------------------------------------
+
+with app.app_context():
+    db.create_all()
+
+# -------------------------------------------------
+# RUN
+# -------------------------------------------------
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)

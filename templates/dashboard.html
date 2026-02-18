@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hospital Analytics Dashboard</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+
+    <h1>Amos Hospital Analytics Dashboard</h1>
+
+    <a href="/logout">Logout</a>
+
+    <hr>
+
+    <!-- FLASH MESSAGES -->
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+          <p><strong>{{ message }}</strong></p>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- NO DATA MESSAGE -->
+    {% if message %}
+        <p>{{ message }}</p>
+    {% endif %}
+
+    <!-- KPIs -->
+    {% if total_cases %}
+        <h3>Key Statistics</h3>
+        <p>Total Cases: {{ total_cases }}</p>
+        <p>Top Disease: {{ top_disease }}</p>
+        <p>Model Accuracy: {{ accuracy }}%</p>
+        <hr>
+    {% endif %}
+
+    <!-- TREND CHART -->
+    {% if trend_chart %}
+        <h3>Disease Trends</h3>
+        {{ trend_chart|safe }}
+        <hr>
+    {% endif %}
+
+    <!-- FORECAST CHART -->
+    {% if forecast_chart %}
+        <h3>6-Month Forecast</h3>
+        {{ forecast_chart|safe }}
+        <hr>
+    {% endif %}
+
+    <!-- FILE UPLOAD -->
+    <h3>Upload Hospital CSV Data</h3>
+    <form method="POST" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <p>Required columns: Date, Malaria, Influenza, Respiratory</p>
+
+</body>
+</html>

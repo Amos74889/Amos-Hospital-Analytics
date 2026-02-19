@@ -141,20 +141,16 @@ def run_random_forest(df_grouped, top_disease):
             "predictions": predictions.tolist()
         }
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, shuffle=False
-    )
-
+    # Train on all data for better accuracy with small datasets
     model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(X_train, y_train)
-
-    y_pred = model.predict(X_test)
-
-    mae  = round(mean_absolute_error(y_test, y_pred), 2)
-    rmse = round(np.sqrt(mean_squared_error(y_test, y_pred)), 2)
-    r2   = round(r2_score(y_test, y_pred) * 100, 1)
+    model.fit(X, y)
 
     all_preds = model.predict(X)
+
+    # Calculate metrics on full data
+    mae  = round(mean_absolute_error(y, all_preds), 2)
+    rmse = round(np.sqrt(mean_squared_error(y, all_preds)), 2)
+    r2   = round(r2_score(y, all_preds) * 100, 1)
 
     return {
         "rf_mae": mae,

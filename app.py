@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 from statsmodels.tsa.arima.model import ARIMA
 import plotly.graph_objects as go
 import json
-import anthropic
+import google.generativeai as genai
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -308,6 +308,202 @@ def build_analysis_summary():
 # HELPER: CALL CLAUDE FOR ANALYSIS
 # -------------------------------------------------
 
+
+# -------------------------------------------------
+# HELPER: BUILD SMART CONTEXT-AWARE SYSTEM PROMPT
+# -------------------------------------------------
+
+def build_smart_prompt(data, is_full_report=False):
+    """Builds a context-aware prompt based on what is happening in the data."""
+
+    # Extract values
+    alerts       = data.get("alerts", [])
+    arima_fc     = data.get("arima_forecast", [])
+    top_disease  = data.get("top_disease", "Unknown")
+    rf_r2        = data.get("rf_r2", 0)
+    arima_mae    = data.get("arima_mae", 0)
+    rf_mae       = data.get("rf_mae", 0)
+    total_cases  = data.get("total_cases", 0)
+    peak_month   = data.get("peak_month", "Unknown")
+    date_range   = data.get("date_range", "")
+    distribution = data.get("distribution", [])
+    rf_rmse      = data.get("rf_rmse", 0)
+    arima_rmse   = data.get("arima_rmse", 0)
+
+    dist_text    = "\n".join(f"  - {d['metric']}: {d['total']:,} cases ({d['pct']}%)" for d in distribution)
+    alerts_text  = "\n".join(f"  - {a['message']}" for a in alerts) if alerts else "  - No active surge alerts"
+
+    # ── SITUATION DETECTION ──
+    has_surge        = any(a["type"] == "danger" for a in alerts)
+    has_warning      = any(a["type"] == "warning" for a in alerts)
+    forecast_rising  = len(arima_fc) >= 2 and arima_fc[-1] > arima_fc[0]
+    forecast_falling = len(arima_fc) >= 2 and arima_fc[-1] < arima_fc[0]
+    low_accuracy     = rf_r2 < 60
+    high_accuracy    = rf_r2 >= 85
+
+    # ── BUILD SITUATIONAL RULES ──
+    situation_rules = []
+
+    if has_surge:
+        situation_rules.append("""
+⚠️ SURGE ALERT ACTIVE — You MUST include these specific recommendations:
+- STAFF: Immediately increase on-call staff by at least 20-30% in affected wards
+- BEDS: Activate overflow bed protocols and prepare emergency ward expansion
+- SUPPLIES: Issue urgent procurement order for medicines related to """ + top_disease + """
+- MANAGEMENT: Implement triage fast-track system to reduce waiting times
+- ESCALATION: Notify hospital administration and county health department immediately""")
+
+    if has_warning:
+        situation_rules.append("""
+⚡ WARNING LEVEL ALERT — You MUST include these precautionary recommendations:
+- STAFF: Place additional staff on standby rotation for the next 2 weeks
+- MONITORING: Increase data collection frequency from monthly to weekly
+- SUPPLIES: Pre-order a 30-day buffer stock of critical medicines
+- MANAGEMENT: Brief ward managers on potential surge preparedness""")
+
+    if forecast_rising:
+        fc_vals = " → ".join(str(int(f)) for f in arima_fc)
+        situation_rules.append(f"""
+📈 ARIMA FORECAST IS RISING ({fc_vals}) — You MUST warn administrators:
+- BEDS: Plan for {int(arima_fc[-1] * 1.1):,} cases next month — begin bed allocation planning now
+- STAFF: Schedule additional staff rotations starting next month
+- MEDICINE: Order medicines 3 weeks in advance based on forecast of {int(arima_fc[-1]):,} cases
+- MANAGEMENT: Set up a weekly review meeting to track if forecast is accurate""")
+
+    if forecast_falling:
+        fc_vals = " → ".join(str(int(f)) for f in arima_fc)
+        situation_rules.append(f"""
+📉 ARIMA FORECAST IS DECLINING ({fc_vals}) — You MUST note this positive trend:
+- STAFF: Maintain current staffing but avoid new hires until trend is confirmed
+- SUPPLIES: Reduce next procurement order by 15-20% to avoid waste
+- MANAGEMENT: Use this period to conduct staff training and equipment maintenance
+- DATA: Investigate what interventions caused the decline and document them""")
+
+    if low_accuracy:
+        situation_rules.append(f"""
+🔴 MODEL ACCURACY IS LOW (R²: {rf_r2}%) — You MUST recommend data improvements:
+- DATA COLLECTION: Current dataset is insufficient — collect at minimum 24 months of data
+- VARIABLES: Add weather data, population density, and seasonal disease patterns
+- FREQUENCY: Switch from monthly to weekly data collection for better model training
+- VALIDATION: Consider hiring a data officer to ensure data quality and completeness
+- MODELS: With more data, try XGBoost or LSTM neural networks for better accuracy""")
+
+    if high_accuracy:
+        situation_rules.append(f"""
+✅ MODEL ACCURACY IS HIGH (R²: {rf_r2}%) — Acknowledge this and build on it:
+- The predictive system is performing well and can be trusted for planning decisions
+- Recommend expanding the model to predict individual ward-level admissions
+- Suggest sharing this model with other hospitals in the region""")
+
+    # ── DISEASE-SPECIFIC RULES ──
+    disease_rules = {
+        "malaria": """
+🦟 MALARIA IS THE TOP DISEASE — Specific actions required:
+- MEDICINE: Ensure adequate stock of Artemether-Lumefantrine (AL) and RDT test kits
+- STAFF: Train nurses on updated malaria case management protocols
+- PREVENTION: Coordinate with county government for mosquito net distribution campaigns
+- SEASONAL: Malaria peaks March-May and October-November in Kenya — plan accordingly""",
+
+        "dengue": """
+🦟 DENGUE IS THE TOP DISEASE — Specific actions required:
+- MEDICINE: Stock up on paracetamol, IV fluids, and platelet monitoring equipment
+- STAFF: Ensure staff are trained to recognize dengue hemorrhagic fever warning signs
+- PREVENTION: Report to Kenya CDC for vector control fumigation in surrounding areas
+- MONITORING: Monitor platelet counts daily for all dengue patients""",
+
+        "cholera": """
+💧 CHOLERA IS THE TOP DISEASE — Specific actions required:
+- MEDICINE: Urgently stock ORS (Oral Rehydration Salts) and IV Ringers Lactate
+- ISOLATION: Set up dedicated cholera treatment unit away from main wards
+- WATER: Report to county water authority immediately — likely contaminated water source
+- STAFF: All staff must use PPE — cholera spreads rapidly in hospital settings
+- REPORTING: This is a notifiable disease — report to Ministry of Health within 24 hours""",
+
+        "icu": """
+🏥 ICU ADMISSIONS ARE HIGH — Specific actions required:
+- BEDS: Review ICU bed capacity immediately — consider converting HDU beds
+- STAFF: Ensure ICU nurse-to-patient ratio does not exceed 1:2
+- EQUIPMENT: Check availability of ventilators, monitors, and infusion pumps
+- REFERRALS: Establish referral protocol with Kenyatta National Hospital for overflow""",
+    }
+
+    # Match disease
+    disease_advice = ""
+    for key, advice in disease_rules.items():
+        if key.lower() in top_disease.lower():
+            disease_advice = advice
+            break
+
+    if not disease_advice:
+        disease_advice = f"""
+🔬 {top_disease} IS THE TOP DISEASE — Specific actions required:
+- MEDICINE: Audit current stock levels for {top_disease} treatment protocols
+- STAFF: Brief clinical staff on current case management guidelines
+- MONITORING: Increase monitoring frequency for {top_disease} patients
+- REPORTING: Ensure all {top_disease} cases are properly coded and reported"""
+
+    # ── ASSEMBLE FULL PROMPT ──
+    situation_block = "\n".join(situation_rules) if situation_rules else "  - All metrics within normal range"
+
+    sections = """1. **Executive Summary**
+2. **Key Findings**
+3. **Disease Burden Analysis** (focus on """ + top_disease + """)
+4. **Risk Alerts & Surge Detection**
+5. **Staff & Resource Allocation** (give specific numbers)
+6. **Medicine & Supply Orders** (name specific medicines)
+7. **Patient Management Advice**
+8. **Model Performance** (Random Forest vs ARIMA comparison)
+9. **Data Collection Improvements**
+10. **3-Month Forecast Outlook**""" if is_full_report else """1. **Key Findings**
+2. **Risk Alerts & Surge Detection**
+3. **Staff & Resource Allocation** (give specific numbers)
+4. **Medicine & Supply Orders** (name specific medicines)
+5. **Patient Management Advice**
+6. **Model Comparison** (Random Forest vs ARIMA)
+7. **Data Collection Improvements**
+8. **Forecast Outlook**"""
+
+    prompt = f"""You are a senior medical data analyst and hospital resource planning expert for Kenya's healthcare system.
+
+=== HOSPITAL DATA ===
+- Date range: {date_range}
+- Total cases: {total_cases:,}
+- Highest disease burden: {top_disease}
+- Peak admission month: {peak_month}
+
+=== MODEL PERFORMANCE ===
+- Random Forest — MAE: {rf_mae}, RMSE: {rf_rmse}, R²: {rf_r2}%
+- ARIMA — MAE: {arima_mae}, RMSE: {arima_rmse}
+- ARIMA 3-Month Forecast: {arima_fc}
+
+=== ACTIVE ALERTS ===
+{alerts_text}
+
+=== DISEASE DISTRIBUTION ===
+{dist_text}
+
+=== SITUATIONAL RULES — YOU MUST FOLLOW THESE ===
+{situation_block}
+
+=== DISEASE-SPECIFIC GUIDANCE ===
+{disease_advice}
+
+=== YOUR TASK ===
+Write a professional, actionable hospital analytics report with these sections:
+{sections}
+
+RULES:
+- Be SPECIFIC — use actual numbers from the data
+- Name SPECIFIC medicines, not just "medications"
+- Give SPECIFIC staff numbers (e.g. "add 3 nurses per shift")
+- Reference SPECIFIC Kenyan context (Kenya CDC, Ministry of Health, county health departments)
+- If a surge is detected, treat it as URGENT and say so clearly
+- If forecast is rising, give a CLEAR WARNING with specific preparation steps
+- Keep each section concise but actionable"""
+
+    return prompt
+
+
 def get_ai_analysis(summary):
     dist_text = "\n".join(
         f"  - {d['metric']}: {d['total']:,} cases ({d['pct']}%)"
@@ -318,45 +514,27 @@ def get_ai_analysis(summary):
         f"  - {a['message']}" for a in summary["alerts"]
     ) if summary["alerts"] else "  - No active surge alerts"
 
-    prompt = f"""You are a senior medical data analyst reviewing hospital disease surveillance data for Kenya.
+    # Build context-aware data dict for smart prompt
+    summary_data = {
+        "alerts":       summary["alerts"],
+        "arima_forecast": summary["arima_forecast"],
+        "top_disease":  summary["top_disease"],
+        "rf_r2":        summary["rf_r2"],
+        "rf_mae":       summary["rf_mae"],
+        "rf_rmse":      summary["rf_rmse"],
+        "arima_mae":    summary["arima_mae"],
+        "arima_rmse":   summary["arima_rmse"],
+        "total_cases":  summary["total_cases"],
+        "peak_month":   summary["peak_month"],
+        "date_range":   summary["date_range"],
+        "distribution": summary["case_distribution"],
+    }
+    prompt = build_smart_prompt(summary_data, is_full_report=True)
 
-Here is the analysis summary:
-- Date range: {summary['date_range']}
-- Total reported cases: {summary['total_cases']:,}
-- Highest disease burden: {summary['top_disease']}
-- Peak reporting month: {summary['peak_month']}
-
-Model Performance:
-- Random Forest — MAE: {summary['rf_mae']}, RMSE: {summary['rf_rmse']}, R²: {summary['rf_r2']}%
-- ARIMA — MAE: {summary['arima_mae']}, RMSE: {summary['arima_rmse']}
-- ARIMA 3-Month Forecast: {summary['arima_forecast']}
-
-Active Alerts:
-{alerts_text}
-
-Disease distribution:
-{dist_text}
-
-Provide a detailed professional medical report with these exact sections:
-
-1. Executive Summary
-2. Key Findings
-3. Disease Burden Analysis
-4. Risk Alerts & Surge Detection
-5. Model Performance Comparison (Random Forest vs ARIMA)
-6. Recommended Actions
-7. Resource Allocation Suggestions
-8. Forecast Outlook
-
-Be specific, data-driven, and actionable. Write in full professional sentences."""
-
-    client  = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-    message = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=2048,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return message.content[0].text
+    genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+    model  = genai.GenerativeModel("gemini-2.0-flash")
+    result = model.generate_content(prompt)
+    return result.text
 
 
 # -------------------------------------------------
@@ -540,9 +718,10 @@ def generate_report():
             mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
 
-    except anthropic.AuthenticationError:
-        flash("Invalid Anthropic API key.")
-        return redirect(url_for("dashboard"))
+    except Exception as auth_err:
+        if "API_KEY" in str(auth_err).upper() or "auth" in str(auth_err).lower():
+            flash("Invalid or missing Gemini API key.")
+            return redirect(url_for("dashboard"))
     except Exception as e:
         flash(f"Report error: {str(e)}")
         return redirect(url_for("dashboard"))
@@ -573,44 +752,29 @@ def ai_insights():
         dist_text   = "\n".join(f"  - {d['metric']}: {d['total']:,} cases ({d['pct']}%)" for d in distribution)
         alerts_text = "\n".join(f"  - {a['message']}" for a in alerts) if alerts else "  - No active surge alerts"
 
-        prompt = f"""You are a senior medical data analyst reviewing hospital disease surveillance data for Kenya.
+        # Build context-aware data dict
+        smart_data = {
+            "alerts":         alerts,
+            "arima_forecast": arima_fc,
+            "top_disease":    top_disease,
+            "rf_r2":          rf_r2,
+            "rf_mae":         rf_mae,
+            "rf_rmse":        rf_rmse,
+            "arima_mae":      arima_mae,
+            "arima_rmse":     arima_rmse,
+            "total_cases":    total_cases,
+            "peak_month":     peak_month,
+            "date_range":     date_range,
+            "distribution":   distribution,
+        }
+        prompt = build_smart_prompt(smart_data, is_full_report=False)
 
-Summary:
-- Date range: {date_range}
-- Total cases: {total_cases:,}
-- Highest disease: {top_disease}
-- Peak month: {peak_month}
+        genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
+        model  = genai.GenerativeModel("gemini-2.0-flash")
+        result = model.generate_content(prompt)
 
-Model Performance:
-- Random Forest — MAE: {rf_mae}, RMSE: {rf_rmse}, R²: {rf_r2}%
-- ARIMA — MAE: {arima_mae}, RMSE: {arima_rmse}, 3-Month Forecast: {arima_fc}
+        return jsonify({"success": True, "insights": result.text})
 
-Active Alerts:
-{alerts_text}
-
-Disease distribution:
-{dist_text}
-
-Provide a concise analysis with:
-1. **Key Findings**
-2. **Risk Alerts & Surge Detection**
-3. **Model Comparison (Random Forest vs ARIMA)**
-4. **Recommended Actions**
-5. **Forecast Outlook**
-
-Be specific and direct."""
-
-        client  = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-        message = client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        return jsonify({"success": True, "insights": message.content[0].text})
-
-    except anthropic.AuthenticationError:
-        return jsonify({"success": False, "error": "Invalid API key."}), 401
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 

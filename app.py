@@ -2,6 +2,7 @@ import os
 import io
 import datetime
 import pandas as pd
+import numpy as np
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import (
@@ -10,15 +11,20 @@ from flask_login import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+from sklearn.model_selection import train_test_split
+from statsmodels.tsa.arima.model import ARIMA
 import plotly.graph_objects as go
 import json
 import anthropic
 from docx import Document
-from docx.shared import Pt, RGBColor, Inches, Cm
+from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # -------------------------------------------------
 # APP CONFIGURATION
@@ -117,6 +123,136 @@ def logout():
 
 
 # -------------------------------------------------
+# HELPER: RUN RANDOM FOREST
+# -------------------------------------------------
+
+def run_random_forest(df_grouped, top_disease):
+    top_df = df_grouped[df_grouped["metric"] == top_disease].copy()
+    top_df["MonthIndex"] = range(1, len(top_df) + 1)
+
+    X = top_df[["MonthIndex"]]
+    y = top_df["value"]
+
+    if len(top_df) < 5:
+        predictions = y.values
+        return {
+            "rf_mae": 0, "rf_rmse": 0, "rf_r2": 100,
+            "predicted_total": int(y.sum()),
+            "predictions": predictions.tolist()
+        }
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, shuffle=False
+    )
+
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+
+    mae  = round(mean_absolute_error(y_test, y_pred), 2)
+    rmse = round(np.sqrt(mean_squared_error(y_test, y_pred)), 2)
+    r2   = round(r2_score(y_test, y_pred) * 100, 1)
+
+    all_preds = model.predict(X)
+
+    return {
+        "rf_mae": mae,
+        "rf_rmse": rmse,
+        "rf_r2": max(r2, 0),
+        "predicted_total": int(sum(all_preds)),
+        "predictions": all_preds.tolist()
+    }
+
+
+# -------------------------------------------------
+# HELPER: RUN ARIMA
+# -------------------------------------------------
+
+def run_arima(df_grouped, top_disease):
+    top_df = df_grouped[df_grouped["metric"] == top_disease].copy()
+    series = top_df["value"].values
+
+    if len(series) < 6:
+        return {
+            "arima_mae": 0, "arima_rmse": 0,
+            "arima_forecast": [], "arima_status": "Not enough data"
+        }
+
+    try:
+        train_size = int(len(series) * 0.8)
+        train, test = series[:train_size], series[train_size:]
+
+        model     = ARIMA(train, order=(2, 1, 2))
+        model_fit = model.fit()
+
+        forecast  = model_fit.forecast(steps=len(test))
+
+        mae  = round(mean_absolute_error(test, forecast), 2)
+        rmse = round(np.sqrt(mean_squared_error(test, forecast)), 2)
+
+        # Forecast next 3 months
+        future_model = ARIMA(series, order=(2, 1, 2))
+        future_fit   = future_model.fit()
+        future_fc    = future_fit.forecast(steps=3)
+
+        return {
+            "arima_mae": mae,
+            "arima_rmse": rmse,
+            "arima_forecast": [round(x, 1) for x in future_fc.tolist()],
+            "arima_status": "Success"
+        }
+
+    except Exception as e:
+        return {
+            "arima_mae": 0, "arima_rmse": 0,
+            "arima_forecast": [], "arima_status": f"Error: {str(e)}"
+        }
+
+
+# -------------------------------------------------
+# HELPER: SURGE ALERTS
+# -------------------------------------------------
+
+def detect_surges(df, case_distribution):
+    alerts = []
+
+    for item in case_distribution:
+        metric = item["metric"]
+        metric_df = df[df["metric"] == metric].copy()
+        metric_df = metric_df.sort_values("date")
+
+        if len(metric_df) < 2:
+            continue
+
+        values = metric_df["value"].values
+        mean_val = np.mean(values)
+        std_val  = np.std(values)
+        last_val = values[-1]
+
+        # Surge if last value is more than 1.5 std above mean
+        if last_val > mean_val + 1.5 * std_val:
+            pct_above = round(((last_val - mean_val) / mean_val) * 100, 1)
+            alerts.append({
+                "type": "danger",
+                "metric": metric,
+                "message": f"⚠️ SURGE ALERT: {metric} is {pct_above}% above average!",
+                "value": int(last_val),
+                "mean": int(mean_val)
+            })
+        elif last_val > mean_val + 0.8 * std_val:
+            alerts.append({
+                "type": "warning",
+                "metric": metric,
+                "message": f"⚡ WARNING: {metric} is trending above normal levels.",
+                "value": int(last_val),
+                "mean": int(mean_val)
+            })
+
+    return alerts
+
+
+# -------------------------------------------------
 # HELPER: BUILD ANALYSIS SUMMARY FROM DB
 # -------------------------------------------------
 
@@ -134,19 +270,12 @@ def build_analysis_summary():
     top_disease   = metric_totals.index[0]
 
     df["month"] = pd.to_datetime(df["date"]).dt.strftime("%B")
-    peak_month = df.groupby("month")["value"].sum().idxmax()
+    peak_month   = df.groupby("month")["value"].sum().idxmax()
 
     df_grouped = df.groupby(["date", "metric"])["value"].sum().reset_index()
-    df_grouped["MonthIndex"] = df_grouped.groupby("metric").cumcount() + 1
 
-    top_df = df_grouped[df_grouped["metric"] == top_disease].copy()
-    X = top_df[["MonthIndex"]]
-    y = top_df["value"]
-
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(X, y)
-    predictions  = model.predict(X)
-    accuracy     = round(r2_score(y, predictions) * 100, 1)
+    rf_results    = run_random_forest(df_grouped, top_disease)
+    arima_results = run_arima(df_grouped, top_disease)
 
     case_distribution = []
     for metric, total in metric_totals.items():
@@ -157,13 +286,25 @@ def build_analysis_summary():
     max_date   = df["date"].max()
     date_range = f"{pd.to_datetime(min_date).strftime('%b %Y')} – {pd.to_datetime(max_date).strftime('%b %Y')}"
 
+    alerts = detect_surges(df, case_distribution)
+
     return {
-        "total_cases":        total_cases,
-        "top_disease":        top_disease,
-        "peak_month":         peak_month,
-        "accuracy":           accuracy,
-        "case_distribution":  case_distribution,
-        "date_range":         date_range,
+        "total_cases":       total_cases,
+        "top_disease":       top_disease,
+        "peak_month":        peak_month,
+        "case_distribution": case_distribution,
+        "date_range":        date_range,
+        "alerts":            alerts,
+        # Random Forest metrics
+        "rf_mae":            rf_results["rf_mae"],
+        "rf_rmse":           rf_results["rf_rmse"],
+        "rf_r2":             rf_results["rf_r2"],
+        "predicted_total":   rf_results["predicted_total"],
+        # ARIMA metrics
+        "arima_mae":         arima_results["arima_mae"],
+        "arima_rmse":        arima_results["arima_rmse"],
+        "arima_forecast":    arima_results["arima_forecast"],
+        "arima_status":      arima_results["arima_status"],
     }
 
 
@@ -177,6 +318,10 @@ def get_ai_analysis(summary):
         for d in summary["case_distribution"]
     )
 
+    alerts_text = "\n".join(
+        f"  - {a['message']}" for a in summary["alerts"]
+    ) if summary["alerts"] else "  - No active surge alerts"
+
     prompt = f"""You are a senior medical data analyst reviewing hospital disease surveillance data for Kenya.
 
 Here is the analysis summary:
@@ -184,7 +329,14 @@ Here is the analysis summary:
 - Total reported cases: {summary['total_cases']:,}
 - Highest disease burden: {summary['top_disease']}
 - Peak reporting month: {summary['peak_month']}
-- ML model accuracy: {summary['accuracy']}%
+
+Model Performance:
+- Random Forest — MAE: {summary['rf_mae']}, RMSE: {summary['rf_rmse']}, R²: {summary['rf_r2']}%
+- ARIMA — MAE: {summary['arima_mae']}, RMSE: {summary['arima_rmse']}
+- ARIMA 3-Month Forecast: {summary['arima_forecast']}
+
+Active Alerts:
+{alerts_text}
 
 Disease distribution:
 {dist_text}
@@ -194,10 +346,11 @@ Provide a detailed professional medical report with these exact sections:
 1. Executive Summary
 2. Key Findings
 3. Disease Burden Analysis
-4. Risk Alerts
-5. Recommended Actions
-6. Resource Allocation Suggestions
-7. Forecast Outlook
+4. Risk Alerts & Surge Detection
+5. Model Performance Comparison (Random Forest vs ARIMA)
+6. Recommended Actions
+7. Resource Allocation Suggestions
+8. Forecast Outlook
 
 Be specific, data-driven, and actionable. Write in full professional sentences."""
 
@@ -217,36 +370,31 @@ Be specific, data-driven, and actionable. Write in full professional sentences."
 def build_word_report(summary, ai_text):
     doc = Document()
 
-    # ── Page margins ──
     for section in doc.sections:
         section.top_margin    = Inches(1)
         section.bottom_margin = Inches(1)
         section.left_margin   = Inches(1.25)
         section.right_margin  = Inches(1.25)
 
-    # ── Styles ──
     style = doc.styles["Normal"]
     style.font.name = "Arial"
     style.font.size = Pt(11)
 
-    # ── COVER ──────────────────────────────────────
-    # Hospital name
     title_p = doc.add_paragraph()
     title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = title_p.add_run("AMOS HOSPITAL ANALYTICS")
-    run.bold      = True
+    run.bold = True
     run.font.size = Pt(20)
     run.font.color.rgb = RGBColor(0x0D, 0x47, 0xA1)
 
     sub_p = doc.add_paragraph()
     sub_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run2 = sub_p.add_run("Disease Surveillance & Analysis Report")
+    run2 = sub_p.add_run("Disease Surveillance & Predictive Analytics Report")
     run2.font.size = Pt(14)
     run2.font.color.rgb = RGBColor(0x37, 0x47, 0x5A)
 
     doc.add_paragraph()
 
-    # Date line
     date_p = doc.add_paragraph()
     date_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     date_p.add_run(f"Report Period: {summary['date_range']}").bold = True
@@ -256,125 +404,96 @@ def build_word_report(summary, ai_text):
     gen_p.add_run(f"Generated: {datetime.datetime.now().strftime('%B %d, %Y at %H:%M')}")
 
     doc.add_paragraph()
-    doc.add_paragraph()
 
-    # ── KPI SUMMARY TABLE ───────────────────────────
+    # KPI Table
     h = doc.add_heading("Summary Statistics", level=1)
     h.runs[0].font.color.rgb = RGBColor(0x0D, 0x47, 0xA1)
 
-    table = doc.add_table(rows=1, cols=4)
+    table  = doc.add_table(rows=2, cols=4)
     table.style = "Table Grid"
-
-    hdr_cells = table.rows[0].cells
-    headers   = ["Total Cases", "Highest Disease", "Peak Month", "Model Accuracy"]
-    values    = [
+    headers = ["Total Cases", "Highest Disease", "Peak Month", "Predicted Cases"]
+    values  = [
         f"{summary['total_cases']:,}",
         summary["top_disease"],
         summary["peak_month"],
-        f"{summary['accuracy']}%"
+        f"{summary['predicted_total']:,}"
     ]
 
     for i, (hdr, val) in enumerate(zip(headers, values)):
-        cell = hdr_cells[i]
-        # Header row
-        hp = cell.paragraphs[0]
-        hp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        hr = hp.add_run(hdr)
-        hr.bold = True
-        hr.font.size = Pt(9)
+        cell = table.rows[0].cells[i]
+        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        hr = cell.paragraphs[0].add_run(hdr)
+        hr.bold = True; hr.font.size = Pt(9)
         hr.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-
-        # Set blue background
-        tc  = cell._tc
-        tcp = tc.get_or_add_tcPr()
+        tc = cell._tc; tcp = tc.get_or_add_tcPr()
         shd = OxmlElement("w:shd")
-        shd.set(qn("w:fill"), "1565C0")
-        shd.set(qn("w:color"), "auto")
-        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:fill"), "1565C0"); shd.set(qn("w:color"), "auto"); shd.set(qn("w:val"), "clear")
         tcp.append(shd)
 
-        # Value row
-        vrow = table.add_row()
-        vc   = vrow.cells[i]
-        vp   = vc.paragraphs[0]
-        vp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        vr = vp.add_run(val)
-        vr.bold      = True
-        vr.font.size = Pt(13)
+        vc = table.rows[1].cells[i]
+        vc.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        vr = vc.paragraphs[0].add_run(val)
+        vr.bold = True; vr.font.size = Pt(13)
 
     doc.add_paragraph()
 
-    # ── DISEASE DISTRIBUTION TABLE ──────────────────
-    h2 = doc.add_heading("Disease Distribution", level=1)
+    # Model Metrics Table
+    h2 = doc.add_heading("Model Performance Metrics", level=1)
     h2.runs[0].font.color.rgb = RGBColor(0x0D, 0x47, 0xA1)
 
-    dtable = doc.add_table(rows=1, cols=3)
-    dtable.style = "Table Grid"
+    mtable = doc.add_table(rows=1, cols=4)
+    mtable.style = "Table Grid"
+    mhdrs  = ["Model", "MAE", "RMSE", "R² / Status"]
+    mvals  = [
+        ("Random Forest", str(summary["rf_mae"]), str(summary["rf_rmse"]), f"{summary['rf_r2']}%"),
+        ("ARIMA", str(summary["arima_mae"]), str(summary["arima_rmse"]), summary["arima_status"]),
+    ]
 
-    dhdrs = ["Rank", "Disease / Metric", "Cases", "Percentage"]
-    dtable = doc.add_table(rows=1, cols=4)
-    dtable.style = "Table Grid"
-
-    for i, dh in enumerate(dhdrs):
-        cell = dtable.rows[0].cells[i]
+    for i, mh in enumerate(mhdrs):
+        cell = mtable.rows[0].cells[i]
         cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-        r = cell.paragraphs[0].add_run(dh)
-        r.bold = True
-        r.font.size = Pt(10)
+        r = cell.paragraphs[0].add_run(mh)
+        r.bold = True; r.font.size = Pt(10)
         r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-        tc  = cell._tc
-        tcp = tc.get_or_add_tcPr()
+        tc = cell._tc; tcp = tc.get_or_add_tcPr()
         shd = OxmlElement("w:shd")
-        shd.set(qn("w:fill"), "1565C0")
-        shd.set(qn("w:color"), "auto")
-        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:fill"), "1565C0"); shd.set(qn("w:color"), "auto"); shd.set(qn("w:val"), "clear")
         tcp.append(shd)
 
-    for idx, item in enumerate(summary["case_distribution"], 1):
-        row   = dtable.add_row().cells
-        fill  = "EBF5FB" if idx % 2 == 0 else "FFFFFF"
-        data  = [str(idx), item["metric"], f"{item['total']:,}", f"{item['pct']}%"]
-        for ci, val in enumerate(data):
+    for row_data in mvals:
+        row = mtable.add_row().cells
+        for ci, val in enumerate(row_data):
             row[ci].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             row[ci].paragraphs[0].add_run(val).font.size = Pt(10)
-            if fill == "EBF5FB":
-                tc  = row[ci]._tc
-                tcp = tc.get_or_add_tcPr()
-                shd = OxmlElement("w:shd")
-                shd.set(qn("w:fill"), fill)
-                shd.set(qn("w:color"), "auto")
-                shd.set(qn("w:val"), "clear")
-                tcp.append(shd)
+
+    doc.add_paragraph()
+
+    # Alerts
+    if summary["alerts"]:
+        h3 = doc.add_heading("Surge Alerts", level=1)
+        h3.runs[0].font.color.rgb = RGBColor(0xC6, 0x28, 0x28)
+        for alert in summary["alerts"]:
+            p = doc.add_paragraph()
+            r = p.add_run(alert["message"])
+            r.bold = True
+            r.font.color.rgb = RGBColor(0xC6, 0x28, 0x28) if alert["type"] == "danger" else RGBColor(0xE6, 0x5C, 0x00)
 
     doc.add_paragraph()
     doc.add_page_break()
 
-    # ── AI ANALYSIS SECTIONS ────────────────────────
-    h3 = doc.add_heading("AI-Powered Analysis & Recommendations", level=1)
-    h3.runs[0].font.color.rgb = RGBColor(0x0D, 0x47, 0xA1)
+    # AI Analysis
+    h4 = doc.add_heading("AI-Powered Analysis & Recommendations", level=1)
+    h4.runs[0].font.color.rgb = RGBColor(0x0D, 0x47, 0xA1)
 
-    note_p = doc.add_paragraph()
-    note_r = note_p.add_run("The following analysis was generated by Claude AI based on your uploaded data.")
-    note_r.italic     = True
-    note_r.font.size  = Pt(10)
-    note_r.font.color.rgb = RGBColor(0x78, 0x90, 0x9C)
-
-    doc.add_paragraph()
-
-    # Parse AI text and write sections
-    current_section = None
     for line in ai_text.split("\n"):
         line = line.strip()
         if not line:
             continue
-
-        # Detect numbered headings like "1. Executive Summary" or "## Executive Summary"
         is_heading = (
             (line[0].isdigit() and ". " in line[:4]) or
             line.startswith("##") or
-            line.startswith("**") and line.endswith("**")
+            (line.startswith("**") and line.endswith("**"))
         )
-
         if is_heading:
             clean = line.lstrip("#").lstrip("0123456789.").strip().strip("*").strip()
             h = doc.add_heading(clean, level=2)
@@ -382,18 +501,10 @@ def build_word_report(summary, ai_text):
         elif line.startswith("- ") or line.startswith("• "):
             p = doc.add_paragraph(style="List Bullet")
             p.add_run(line.lstrip("- ").lstrip("• ")).font.size = Pt(11)
-        elif line.startswith("**") and "**" in line[2:]:
-            p = doc.add_paragraph()
-            r = p.add_run(line.strip("*"))
-            r.bold      = True
-            r.font.size = Pt(11)
         else:
             p = doc.add_paragraph()
             p.add_run(line).font.size = Pt(11)
 
-    doc.add_paragraph()
-
-    # ── FOOTER NOTE ─────────────────────────────────
     footer_p = doc.add_paragraph()
     footer_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     fr = footer_p.add_run(
@@ -403,7 +514,6 @@ def build_word_report(summary, ai_text):
     fr.font.color.rgb = RGBColor(0x9E, 0x9E, 0x9E)
     fr.italic = True
 
-    # Save to buffer
     buf = io.BytesIO()
     doc.save(buf)
     buf.seek(0)
@@ -423,8 +533,8 @@ def generate_report():
             flash("No data found. Please upload a CSV first.")
             return redirect(url_for("dashboard"))
 
-        ai_text  = get_ai_analysis(summary)
-        doc_buf  = build_word_report(summary, ai_text)
+        ai_text = get_ai_analysis(summary)
+        doc_buf = build_word_report(summary, ai_text)
         filename = f"Amos_Hospital_Report_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.docx"
 
         return send_file(
@@ -435,7 +545,7 @@ def generate_report():
         )
 
     except anthropic.AuthenticationError:
-        flash("Invalid Anthropic API key. Set ANTHROPIC_API_KEY and restart.")
+        flash("Invalid Anthropic API key.")
         return redirect(url_for("dashboard"))
     except Exception as e:
         flash(f"Report error: {str(e)}")
@@ -443,7 +553,7 @@ def generate_report():
 
 
 # -------------------------------------------------
-# AI INSIGHTS (JSON — for the inline panel)
+# AI INSIGHTS ROUTE
 # -------------------------------------------------
 
 @app.route("/ai-insights", methods=["POST"])
@@ -454,32 +564,43 @@ def ai_insights():
         top_disease  = data.get("top_disease", "Unknown")
         total_cases  = data.get("total_cases", 0)
         peak_month   = data.get("peak_month", "Unknown")
-        accuracy     = data.get("accuracy", 0)
+        rf_mae       = data.get("rf_mae", 0)
+        rf_rmse      = data.get("rf_rmse", 0)
+        rf_r2        = data.get("rf_r2", 0)
+        arima_mae    = data.get("arima_mae", 0)
+        arima_rmse   = data.get("arima_rmse", 0)
+        arima_fc     = data.get("arima_forecast", [])
         distribution = data.get("distribution", [])
+        alerts       = data.get("alerts", [])
         date_range   = data.get("date_range", "")
 
-        dist_text = "\n".join(
-            f"  - {d['metric']}: {d['total']:,} cases ({d['pct']}%)"
-            for d in distribution
-        )
+        dist_text   = "\n".join(f"  - {d['metric']}: {d['total']:,} cases ({d['pct']}%)" for d in distribution)
+        alerts_text = "\n".join(f"  - {a['message']}" for a in alerts) if alerts else "  - No active surge alerts"
 
         prompt = f"""You are a senior medical data analyst reviewing hospital disease surveillance data for Kenya.
 
 Summary:
 - Date range: {date_range}
-- Total cases: {total_cases}
+- Total cases: {total_cases:,}
 - Highest disease: {top_disease}
 - Peak month: {peak_month}
-- Model accuracy: {accuracy}%
+
+Model Performance:
+- Random Forest — MAE: {rf_mae}, RMSE: {rf_rmse}, R²: {rf_r2}%
+- ARIMA — MAE: {arima_mae}, RMSE: {arima_rmse}, 3-Month Forecast: {arima_fc}
+
+Active Alerts:
+{alerts_text}
 
 Disease distribution:
 {dist_text}
 
 Provide a concise analysis with:
 1. **Key Findings**
-2. **Risk Alerts**
-3. **Recommended Actions**
-4. **Forecast Outlook**
+2. **Risk Alerts & Surge Detection**
+3. **Model Comparison (Random Forest vs ARIMA)**
+4. **Recommended Actions**
+5. **Forecast Outlook**
 
 Be specific and direct."""
 
@@ -561,29 +682,26 @@ def dashboard():
     metric_totals = df.groupby("metric")["value"].sum().sort_values(ascending=False)
     top_disease   = metric_totals.index[0]
 
-    df["month"] = pd.to_datetime(df["date"]).dt.strftime("%B")
+    df["month"]    = pd.to_datetime(df["date"]).dt.strftime("%B")
     peak_month     = df.groupby("month")["value"].sum().idxmax()
     peak_month_pct = round(df.groupby("month")["value"].sum().pct_change().max() * 100, 1)
 
     df_grouped = df.groupby(["date", "metric"])["value"].sum().reset_index()
-    df_grouped["MonthIndex"] = df_grouped.groupby("metric").cumcount() + 1
 
-    top_df = df_grouped[df_grouped["metric"] == top_disease].copy()
-    X, y   = top_df[["MonthIndex"]], top_df["value"]
-
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
-    model.fit(X, y)
-    predictions    = model.predict(X)
-    accuracy       = round(r2_score(y, predictions) * 100, 1)
-    predicted_total = int(sum(predictions))
+    # Run both models
+    rf_results    = run_random_forest(df_grouped, top_disease)
+    arima_results = run_arima(df_grouped, top_disease)
 
     case_distribution = [
         {"metric": m, "total": int(t), "pct": round(t / metric_totals.sum() * 100, 1)}
         for m, t in metric_totals.items()
     ]
 
-    colors     = ["#4A9EFF", "#FF8C42", "#4CAF87", "#E94E77", "#9B59B6"]
-    trend_fig  = go.Figure()
+    alerts = detect_surges(df, case_distribution)
+
+    # Trend chart
+    colors    = ["#4A9EFF", "#FF8C42", "#4CAF87", "#E94E77", "#9B59B6"]
+    trend_fig = go.Figure()
     for i, metric in enumerate(df_grouped["metric"].unique()):
         mdf = df_grouped[df_grouped["metric"] == metric]
         trend_fig.add_trace(go.Scatter(
@@ -613,9 +731,19 @@ def dashboard():
         top_disease=top_disease,
         peak_month=peak_month,
         peak_month_pct=peak_month_pct,
-        accuracy=accuracy,
-        predicted_total=f"{predicted_total:,}",
+        # Random Forest
+        rf_mae=rf_results["rf_mae"],
+        rf_rmse=rf_results["rf_rmse"],
+        rf_r2=rf_results["rf_r2"],
+        predicted_total=f"{rf_results['predicted_total']:,}",
+        # ARIMA
+        arima_mae=arima_results["arima_mae"],
+        arima_rmse=arima_results["arima_rmse"],
+        arima_forecast=arima_results["arima_forecast"],
+        arima_status=arima_results["arima_status"],
+        # Other
         case_distribution=case_distribution,
+        alerts=alerts,
         trend_chart=trend_chart,
         date_range=date_range,
         username=current_user.username
@@ -635,4 +763,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=True)

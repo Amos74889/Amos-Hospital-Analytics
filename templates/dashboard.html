@@ -527,6 +527,18 @@
     </div>
   {% else %}
 
+  <!-- SURGE ALERTS -->
+  {% if alerts %}
+  <div style="display:flex;flex-direction:column;gap:8px;">
+    {% for alert in alerts %}
+    <div style="background:{% if alert.type == 'danger' %}#2A0F0F{% else %}#2A1A0A{% endif %};border:1px solid {% if alert.type == 'danger' %}#EF4444{% else %}#F97316{% endif %};border-radius:10px;padding:12px 18px;color:{% if alert.type == 'danger' %}#EF4444{% else %}#F97316{% endif %};font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px;">
+      {% if alert.type == 'danger' %}🚨{% else %}⚡{% endif %} {{ alert.message }}
+      <span style="margin-left:auto;font-size:12px;opacity:0.7;">Current: {{ alert.value }} | Avg: {{ alert.mean }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <!-- KPI CARDS -->
   <div class="kpi-row">
     <div class="kpi-card kpi-blue">
@@ -556,10 +568,55 @@
     <div class="kpi-card kpi-purple">
       <div class="kpi-icon">🤖</div>
       <div class="kpi-info">
-        <div class="kpi-label">Model Accuracy</div>
-        <div class="kpi-value">{{ predicted_total }}</div>
-        <div class="kpi-sub"><span class="badge-info">{{ accuracy }}% accurate</span></div>
+        <div class="kpi-label">RF Predicted Cases</div>
+        <div class="kpi-value" style="font-size:20px;">{{ predicted_total }}</div>
+        <div class="kpi-sub"><span class="badge-info">R²: {{ rf_r2 }}%</span></div>
       </div>
+    </div>
+  </div>
+
+  <!-- MODEL METRICS -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:16px;">🌲 Random Forest Model</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;">
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
+          <div style="font-size:22px;font-weight:700;color:var(--primary);">{{ rf_mae }}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">MAE</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
+          <div style="font-size:22px;font-weight:700;color:var(--orange);">{{ rf_rmse }}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">RMSE</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
+          <div style="font-size:22px;font-weight:700;color:var(--green);">{{ rf_r2 }}%</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">R²</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:16px;">📈 ARIMA Model</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;">
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
+          <div style="font-size:22px;font-weight:700;color:var(--primary);">{{ arima_mae }}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">MAE</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
+          <div style="font-size:22px;font-weight:700;color:var(--orange);">{{ arima_rmse }}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">RMSE</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
+          <div style="font-size:20px;font-weight:700;color:var(--green);">
+            {% if arima_forecast %}{{ arima_forecast[0]|int }}{% else %}N/A{% endif %}
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Next Month</div>
+        </div>
+      </div>
+      {% if arima_forecast %}
+      <div style="margin-top:12px;font-size:12px;color:var(--text-muted);text-align:center;">
+        3-Month Forecast: {% for f in arima_forecast %}<span style="color:var(--text);font-weight:600;">{{ f|int }}</span>{% if not loop.last %} → {% endif %}{% endfor %}
+      </div>
+      {% endif %}
     </div>
   </div>
 

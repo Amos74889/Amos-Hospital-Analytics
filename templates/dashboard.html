@@ -1,62 +1,805 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Hospital Analytics Dashboard</title>
-    <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Amos Hospital Analytics</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0A0C10;
+      --surface: #111318;
+      --surface2: #1A1D24;
+      --border: #2A2D36;
+      --text: #E8EAF0;
+      --text-muted: #6B7280;
+      --primary: #3B82F6;
+      --primary-light: #1E2A45;
+      --green: #10B981;
+      --green-light: #0D2A1F;
+      --orange: #F97316;
+      --orange-light: #2A1A0A;
+      --red: #EF4444;
+      --red-light: #2A0F0F;
+      --purple: #8B5CF6;
+      --purple-light: #1E1A2E;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.3);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── TOPBAR ── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      height: 62px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 4px rgba(26,35,64,0.06);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: var(--primary);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 18px;
+    }
+
+    .logo-text {
+      font-family: 'DM Serif Display', serif;
+      font-size: 17px;
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .upload-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 8px 18px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .upload-btn:hover { background: #1344b8; }
+
+    .icon-btn {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-muted);
+      font-size: 16px;
+      transition: background 0.2s;
+    }
+    .icon-btn:hover { background: var(--bg); }
+
+    .avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px;
+      cursor: pointer;
+    }
+
+    /* ── UPLOAD BAR ── */
+    .upload-bar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .file-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      flex: 1;
+      max-width: 380px;
+    }
+
+    .file-input-wrap input[type="file"] { display: none; }
+    .file-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .choose-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .date-range {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .run-btn {
+      background: var(--green);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 9px 24px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-left: auto;
+      transition: background 0.2s;
+    }
+    .run-btn:hover { background: #0b8a5e; }
+
+    /* ── MAIN ── */
+    .main {
+      padding: 24px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    /* ── KPI CARDS ── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border: 1px solid var(--border);
+      transition: box-shadow 0.2s;
+    }
+    .kpi-card:hover { box-shadow: var(--shadow-lg); }
+
+    .kpi-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    .kpi-info { flex: 1; }
+    .kpi-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi-value { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; }
+    .kpi-sub { font-size: 12px; margin-top: 4px; font-weight: 500; }
+
+    .kpi-blue .kpi-icon { background: var(--primary-light); color: var(--primary); }
+    .kpi-green .kpi-icon { background: var(--green-light); color: var(--green); }
+    .kpi-orange .kpi-icon { background: var(--orange-light); color: var(--orange); }
+    .kpi-purple .kpi-icon { background: var(--purple-light); color: var(--purple); }
+
+    .badge-up { color: var(--green); background: var(--green-light); padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge-info { color: var(--primary); background: var(--primary-light); padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+
+    /* ── GRID ── */
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+    }
+
+    .left-col { display: flex; flex-direction: column; gap: 20px; }
+    .right-col { display: flex; flex-direction: column; gap: 20px; }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .view-all {
+      font-size: 13px;
+      color: var(--primary);
+      font-weight: 600;
+      text-decoration: none;
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    /* ── CHART ── */
+    #trend-chart { width: 100%; height: 280px; }
+
+    /* ── TABLE ── */
+    .disease-table { width: 100%; border-collapse: collapse; }
+    .disease-table th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .disease-table td {
+      padding: 12px 12px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .disease-table tr:last-child td { border-bottom: none; }
+    .disease-table tr:hover td { background: var(--surface2); }
+
+    .rank-badge {
+      width: 24px; height: 24px;
+      border-radius: 6px;
+      background: var(--surface2);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--text-muted);
+    }
+    .rank-1 { background: #2A2000; color: #F59E0B; }
+    .rank-2 { background: #1E1E1E; color: #9CA3AF; }
+    .rank-3 { background: #2A1500; color: #FB923C; }
+
+    .disease-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+
+    .bar-wrap { display: flex; align-items: center; gap: 10px; }
+    .bar-track {
+      width: 60px; height: 5px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .bar-fill { height: 100%; border-radius: 3px; }
+
+    .pct-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+
+    /* ── DONUT CARD ── */
+    .donut-wrap { display: flex; align-items: center; gap: 20px; }
+    #dist-chart { width: 160px; height: 160px; flex-shrink: 0; }
+
+    .legend-list { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+    .legend-item { display: flex; align-items: center; justify-content: space-between; }
+    .legend-label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+    .legend-pct { font-size: 14px; font-weight: 700; }
+
+    /* ── PREDICTED CARD ── */
+    .pred-wrap { display: flex; align-items: center; gap: 20px; }
+    #pred-chart { width: 140px; height: 140px; flex-shrink: 0; }
+    .pred-stats { flex: 1; }
+    .pred-row { margin-bottom: 12px; }
+    .pred-num { font-size: 22px; font-weight: 700; }
+    .pred-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .accuracy-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--green-light); color: var(--green);
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 12px; font-weight: 700;
+    }
+
+    /* ── AI PANEL ── */
+    .ai-panel {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .ai-header {
+      padding: 16px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ai-title-wrap { display: flex; align-items: center; gap: 10px; }
+    .ai-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, #1A56DB, #7C3AED);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .ai-title { font-size: 15px; font-weight: 700; }
+    .ai-subtitle { font-size: 11px; color: var(--text-muted); }
+
+    .ai-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, #1A56DB, #7C3AED);
+      color: white; border: none;
+      border-radius: var(--radius-sm);
+      padding: 9px 18px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px; font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .ai-btn:hover { opacity: 0.88; }
+
+    .ai-body { padding: 20px 22px; min-height: 80px; }
+
+    .ai-placeholder {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+      padding: 20px 0;
+    }
+
+    .ai-result {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+
+    .ai-result h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 14px 0 6px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .flash-msg {
+      background: #2A1F00;
+      border: 1px solid #4A3800;
+      color: #FCD34D;
+      border-radius: var(--radius-sm);
+      padding: 10px 16px;
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    /* ── REPORT BTN ── */
+    .report-btn {
+      display: flex; align-items: center; gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 16px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px; font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .report-btn:hover { background: var(--bg); }
+
+    @media (max-width: 1100px) {
+      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+      .content-grid { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
 
-    <h1>Amos Hospital Analytics Dashboard</h1>
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-left">
+    <div class="logo-icon">🏥</div>
+    <span class="logo-text">Amos Hospital Analytics</span>
+  </div>
+  <div class="topbar-right">
+    <a href="/generate-report" class="report-btn">📄 Export Report</a>
+    <div class="icon-btn" title="Notifications">🔔</div>
+    <div class="icon-btn" title="Users">👥</div>
+    <div class="icon-btn" title="Settings">⚙️</div>
+    <div class="avatar" title="{{ username }}">{{ username[0]|upper }}</div>
+    <a href="/logout" style="font-size:13px; color:var(--text-muted); text-decoration:none; font-weight:500;">Logout</a>
+  </div>
+</header>
 
-    <a href="/logout">Logout</a>
+<!-- UPLOAD BAR -->
+<div class="upload-bar">
+  <form method="POST" enctype="multipart/form-data" style="display:flex;align-items:center;gap:14px;width:100%;" id="upload-form">
+    <div class="file-input-wrap">
+      <label class="choose-btn" for="csv-file">Choose file</label>
+      <input type="file" name="file" id="csv-file" accept=".csv" onchange="document.getElementById('file-label').textContent = this.files[0]?.name || 'No file chosen'"/>
+      <span class="file-label" id="file-label">
+        {% if date_range %}{{ date_range }}{% else %}No file chosen{% endif %}
+      </span>
+    </div>
+    {% if date_range %}
+    <div class="date-range">
+      📅 {{ date_range }}
+    </div>
+    {% endif %}
+    <button type="submit" class="run-btn">▶ Run Models</button>
+  </form>
+</div>
 
-    <hr>
+<!-- MAIN -->
+<main class="main">
 
-    <!-- FLASH MESSAGES -->
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        {% for message in messages %}
-          <p><strong>{{ message }}</strong></p>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="flash-msg">⚠️ {{ msg }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {% if message %}
+    <div class="ai-panel" style="padding:40px; text-align:center; color:var(--text-muted);">
+      <div style="font-size:40px; margin-bottom:12px;">📂</div>
+      <div style="font-size:16px; font-weight:600;">No data uploaded yet</div>
+      <div style="font-size:13px; margin-top:6px;">Upload a CSV file above to get started</div>
+    </div>
+  {% else %}
+
+  <!-- KPI CARDS -->
+  <div class="kpi-row">
+    <div class="kpi-card kpi-blue">
+      <div class="kpi-icon">📊</div>
+      <div class="kpi-info">
+        <div class="kpi-label">Total Cases</div>
+        <div class="kpi-value">{{ total_cases }}</div>
+        <div class="kpi-sub"><span class="badge-up">↑ Active</span></div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-orange">
+      <div class="kpi-icon">🔥</div>
+      <div class="kpi-info">
+        <div class="kpi-label">Highest Disease</div>
+        <div class="kpi-value" style="font-size:18px;">{{ top_disease }}</div>
+        <div class="kpi-sub" style="color:var(--orange);">Top burden</div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-green">
+      <div class="kpi-icon">📅</div>
+      <div class="kpi-info">
+        <div class="kpi-label">Peak Month</div>
+        <div class="kpi-value" style="font-size:20px;">{{ peak_month }}</div>
+        <div class="kpi-sub"><span class="badge-up">+{{ peak_month_pct }}%</span></div>
+      </div>
+    </div>
+    <div class="kpi-card kpi-purple">
+      <div class="kpi-icon">🤖</div>
+      <div class="kpi-info">
+        <div class="kpi-label">Model Accuracy</div>
+        <div class="kpi-value">{{ predicted_total }}</div>
+        <div class="kpi-sub"><span class="badge-info">{{ accuracy }}% accurate</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT GRID -->
+  <div class="content-grid">
+
+    <!-- LEFT -->
+    <div class="left-col">
+
+      <!-- TREND CHART -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Disease Trends in Kenya</div>
+          </div>
+        </div>
+        <div class="card-subtitle">An analysis of the most common disease trends reported — {{ date_range }}</div>
+        <div id="trend-chart"></div>
+      </div>
+
+      <!-- DISEASE TABLE -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Top Disease Trends</div>
+          <a href="#" class="view-all">View All →</a>
+        </div>
+        <table class="disease-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Disease</th>
+              <th>Total Cases</th>
+              <th>Percentage</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% set colors = ['#1A56DB','#0EA472','#F97316','#8B5CF6','#EF4444'] %}
+            {% for item in case_distribution %}
+            <tr>
+              <td><span class="rank-badge rank-{{ loop.index }}">{{ loop.index }}</span></td>
+              <td>
+                <span class="disease-dot" style="background:{{ colors[loop.index0 % colors|length] }}"></span>
+                {{ item.metric }}
+              </td>
+              <td>
+                <div class="bar-wrap">
+                  <strong>{{ "{:,}".format(item.total) }}</strong>
+                  <div class="bar-track">
+                    <div class="bar-fill" style="width:{{ item.pct }}%; background:{{ colors[loop.index0 % colors|length] }};"></div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="pct-text">{{ item.pct }}%</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right-col">
+
+      <!-- CASE DISTRIBUTION -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px;">Case Distribution</div>
+        <div class="donut-wrap" style="display:flex;align-items:center;gap:16px;">
+          <div id="dist-chart" style="width:140px;height:140px;flex-shrink:0;"></div>
+          <div class="legend-list">
+            {% set colors = ['#3B82F6','#10B981','#F97316','#8B5CF6','#EF4444'] %}
+            {% for item in case_distribution %}
+            <div class="legend-item" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;">
+              <div class="legend-label" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:3px;flex-shrink:0;background:{{ colors[loop.index0 % colors|length] }}"></span>
+                <span style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.metric }}</span>
+              </div>
+              <span style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0;">{{ item.pct }}%</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <!-- PREDICTED vs ACTUAL -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px;">Predicted vs. Actual</div>
+        <div class="pred-wrap">
+          <div id="pred-chart"></div>
+          <div class="pred-stats">
+            <div class="pred-row">
+              <div class="pred-num" style="color:var(--primary);">{{ total_cases }}</div>
+              <div class="pred-sub">Total Cases (Actual)</div>
+            </div>
+            <div class="pred-row">
+              <div class="pred-num" style="color:var(--green);">{{ predicted_total }}</div>
+              <div class="pred-sub">Total Cases (Predicted)</div>
+            </div>
+            <div class="accuracy-badge">✓ {{ accuracy }}% Accuracy</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DATA INSIGHTS -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:14px;">📊 Data Insights</div>
+        {% set colors = ['#1A56DB','#0EA472','#F97316','#8B5CF6','#EF4444'] %}
+        {% for item in case_distribution %}
+        <div style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+            <span style="font-size:13px;font-weight:500;">{{ loop.index }}. {{ item.metric }}</span>
+            <span style="font-size:13px;font-weight:700;">{{ item.pct }}%</span>
+          </div>
+          <div class="bar-track" style="width:100%;height:6px;">
+            <div class="bar-fill" style="width:{{ item.pct }}%;background:{{ colors[loop.index0 % colors|length] }};"></div>
+          </div>
+        </div>
         {% endfor %}
-      {% endif %}
-    {% endwith %}
+      </div>
 
-    <!-- NO DATA MESSAGE -->
-    {% if message %}
-        <p>{{ message }}</p>
-    {% endif %}
+    </div>
+  </div>
 
-    <!-- KPIs -->
-    {% if total_cases %}
-        <h3>Key Statistics</h3>
-        <p>Total Cases: {{ total_cases }}</p>
-        <p>Top Disease: {{ top_disease }}</p>
-        <p>Model Accuracy: {{ accuracy }}%</p>
-        <hr>
-    {% endif %}
+  <!-- AI PANEL -->
+  <div class="ai-panel">
+    <div class="ai-header">
+      <div class="ai-title-wrap">
+        <div class="ai-icon">🤖</div>
+        <div>
+          <div class="ai-title">AI Analysis</div>
+          <div class="ai-subtitle">Powered by Claude · Get recommendations based on your data</div>
+        </div>
+      </div>
+      <button class="ai-btn" onclick="getInsights()" id="ai-btn">
+        ✨ Get AI Insights
+      </button>
+    </div>
+    <div class="ai-body" id="ai-body">
+      <div class="ai-placeholder">Click "Get AI Insights" to generate an AI-powered analysis of your data.</div>
+    </div>
+  </div>
 
-    <!-- TREND CHART -->
-    {% if trend_chart %}
-        <h3>Disease Trends</h3>
-        {{ trend_chart|safe }}
-        <hr>
-    {% endif %}
+  {% endif %}
+</main>
 
-    <!-- FORECAST CHART -->
-    {% if forecast_chart %}
-        <h3>6-Month Forecast</h3>
-        {{ forecast_chart|safe }}
-        <hr>
-    {% endif %}
+<script>
+  // ── Trend Chart ──
+  {% if trend_chart %}
+  const trendData = {{ trend_chart|safe }};
+  trendData.layout = Object.assign(trendData.layout || {}, {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { family: 'DM Sans, sans-serif', color: '#E8EAF0', size: 12 },
+    margin: { l: 40, r: 20, t: 20, b: 40 },
+    xaxis: { gridcolor: '#2A2D36', showline: false, zeroline: false },
+    yaxis: { gridcolor: '#2A2D36', showline: false, zeroline: false },
+    hovermode: 'x unified',
+    legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' },
+    colorway: ['#1A56DB', '#F97316', '#0EA472', '#8B5CF6', '#EF4444']
+  });
+  Plotly.newPlot('trend-chart', trendData.data, trendData.layout, { responsive: true, displayModeBar: false });
+  {% endif %}
 
-    <!-- FILE UPLOAD -->
-    <h3>Upload Hospital CSV Data</h3>
-    <form method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" required>
-        <button type="submit">Upload</button>
-    </form>
+  // ── Donut Chart ──
+  {% if case_distribution %}
+  const distLabels = {{ case_distribution | map(attribute='metric') | list | tojson }};
+  const distValues = {{ case_distribution | map(attribute='total') | list | tojson }};
+  Plotly.newPlot('dist-chart', [{
+    type: 'pie', labels: distLabels, values: distValues,
+    hole: 0.55,
+    marker: { colors: ['#1A56DB','#0EA472','#F97316','#8B5CF6','#EF4444'] },
+    textinfo: 'none',
+    hovertemplate: '%{label}: %{percent}<extra></extra>'
+  }], {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    margin: { l: 0, r: 0, t: 0, b: 0 },
+    showlegend: false
+  }, { responsive: true, displayModeBar: false });
 
-    <p>Required columns: Date, Malaria, Influenza, Respiratory</p>
+  // ── Accuracy Donut ──
+  const accuracy = {{ accuracy }};
+  Plotly.newPlot('pred-chart', [{
+    type: 'pie',
+    values: [accuracy, 100 - accuracy],
+    hole: 0.6,
+    marker: { colors: ['#0EA472', '#E2E8F4'] },
+    textinfo: 'none',
+    hoverinfo: 'skip'
+  }], {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    margin: { l: 0, r: 0, t: 0, b: 0 },
+    showlegend: false,
+    annotations: [{
+      text: accuracy + '%',
+      x: 0.5, y: 0.5, showarrow: false,
+      font: { size: 16, color: '#E8EAF0', family: 'DM Sans' }
+    }]
+  }, { responsive: true, displayModeBar: false });
+  {% endif %}
+
+  // ── AI Insights ──
+  async function getInsights() {
+    const btn = document.getElementById('ai-btn');
+    const body = document.getElementById('ai-body');
+    btn.innerHTML = '<span class="spinner"></span> Analyzing...';
+    btn.disabled = true;
+    body.innerHTML = '<div class="ai-placeholder">⏳ Claude is analyzing your hospital data...</div>';
+
+    try {
+      const res = await fetch('/ai-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          top_disease: '{{ top_disease }}',
+          total_cases: {{ total_cases|replace(",", "") if total_cases else 0 }},
+          peak_month: '{{ peak_month }}',
+          accuracy: {{ accuracy }},
+          date_range: '{{ date_range }}',
+          distribution: {{ case_distribution | tojson }}
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        let html = data.insights
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/^(\d+\. .+)$/gm, '<h3>$1</h3>')
+          .replace(/^- (.+)$/gm, '• $1');
+        body.innerHTML = '<div class="ai-result">' + html + '</div>';
+      } else {
+        body.innerHTML = '<div style="color:#EF4444;font-size:14px;">⚠️ ' + data.error + '</div>';
+      }
+    } catch(e) {
+      body.innerHTML = '<div style="color:#EF4444;font-size:14px;">⚠️ Connection error. Please try again.</div>';
+    }
+
+    btn.innerHTML = '✨ Get AI Insights';
+    btn.disabled = false;
+  }
+</script>
 
 </body>
 </html>

@@ -1,25 +1,325 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Login</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Amos Hospital Analytics — Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #0A0C10;
+      color: #E8EAF0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Glowing background blobs */
+    .blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.15;
+      pointer-events: none;
+    }
+    .blob-1 { width: 500px; height: 500px; background: #3B82F6; top: -150px; left: -150px; }
+    .blob-2 { width: 400px; height: 400px; background: #8B5CF6; bottom: -100px; right: -100px; }
+    .blob-3 { width: 300px; height: 300px; background: #10B981; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+
+    /* Grid pattern overlay */
+    .grid-bg {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(59,130,246,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59,130,246,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    .login-wrapper {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 420px;
+      padding: 20px;
+    }
+
+    /* Logo */
+    .logo-section {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo-icon {
+      width: 56px; height: 56px;
+      background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+      border-radius: 16px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 26px;
+      margin-bottom: 14px;
+      box-shadow: 0 0 30px rgba(59,130,246,0.3);
+    }
+
+    .logo-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 22px;
+      color: #E8EAF0;
+      letter-spacing: -0.3px;
+    }
+
+    .logo-sub {
+      font-size: 13px;
+      color: #6B7280;
+      margin-top: 4px;
+    }
+
+    /* Card */
+    .login-card {
+      background: #111318;
+      border: 1px solid #2A2D36;
+      border-radius: 20px;
+      padding: 36px 32px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    }
+
+    .card-heading {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .card-subheading {
+      font-size: 13px;
+      color: #6B7280;
+      margin-bottom: 28px;
+    }
+
+    /* Flash messages */
+    .flash {
+      background: #2A1F00;
+      border: 1px solid #4A3800;
+      color: #FCD34D;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    /* Form */
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #9CA3AF;
+      margin-bottom: 7px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .input-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 16px;
+      pointer-events: none;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      background: #1A1D24;
+      border: 1px solid #2A2D36;
+      border-radius: 10px;
+      padding: 12px 14px 12px 42px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      color: #E8EAF0;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      border-color: #3B82F6;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+
+    input::placeholder { color: #4B5563; }
+
+    /* Show password toggle */
+    .toggle-pw {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      font-size: 16px;
+      color: #6B7280;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .toggle-pw:hover { color: #E8EAF0; }
+
+    /* Login button */
+    .login-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #3B82F6, #6366F1);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.2s, transform 0.1s;
+      box-shadow: 0 4px 20px rgba(59,130,246,0.3);
+      letter-spacing: 0.3px;
+    }
+    .login-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .login-btn:active { transform: translateY(0); }
+
+    /* Divider */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 22px 0;
+    }
+    .divider-line { flex: 1; height: 1px; background: #2A2D36; }
+    .divider-text { font-size: 12px; color: #4B5563; }
+
+    /* Register link */
+    .register-link {
+      text-align: center;
+      font-size: 13px;
+      color: #6B7280;
+    }
+
+    .register-link a {
+      color: #3B82F6;
+      font-weight: 600;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .register-link a:hover { color: #60A5FA; }
+
+    /* Stats row at bottom */
+    .stats-row {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+      margin-top: 32px;
+    }
+
+    .stat-item { text-align: center; }
+    .stat-num { font-size: 18px; font-weight: 700; color: #3B82F6; }
+    .stat-label { font-size: 11px; color: #4B5563; margin-top: 2px; }
+  </style>
 </head>
 <body>
-    <h2>Login</h2>
 
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        {% for message in messages %}
-          <p style="color:red;">{{ message }}</p>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+  <div class="grid-bg"></div>
 
-    <form method="POST">
-        <input type="text" name="username" placeholder="Username" required><br><br>
-        <input type="password" name="password" placeholder="Password" required><br><br>
-        <button type="submit">Login</button>
-    </form>
+  <div class="login-wrapper">
 
-    <p>Don't have an account? <a href="/register">Register</a></p>
+    <!-- Logo -->
+    <div class="logo-section">
+      <div class="logo-icon">🏥</div>
+      <div class="logo-title">Amos Hospital Analytics</div>
+      <div class="logo-sub">Disease Surveillance & Intelligence Platform</div>
+    </div>
+
+    <!-- Card -->
+    <div class="login-card">
+      <div class="card-heading">Welcome back</div>
+      <div class="card-subheading">Sign in to access your dashboard</div>
+
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          {% for msg in messages %}
+            <div class="flash">⚠️ {{ msg }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST">
+        <div class="form-group">
+          <label>Username</label>
+          <div class="input-wrap">
+            <span class="input-icon">👤</span>
+            <input type="text" name="username" placeholder="Enter your username" required/>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Password</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔒</span>
+            <input type="password" name="password" id="pw-field" placeholder="Enter your password" required/>
+            <button type="button" class="toggle-pw" onclick="togglePw()">👁</button>
+          </div>
+        </div>
+
+        <button type="submit" class="login-btn">Sign In →</button>
+      </form>
+
+      <div class="divider">
+        <div class="divider-line"></div>
+        <span class="divider-text">New here?</span>
+        <div class="divider-line"></div>
+      </div>
+
+      <div class="register-link">
+        Don't have an account? <a href="{{ url_for('register') }}">Create one</a>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-item">
+        <div class="stat-num">215K+</div>
+        <div class="stat-label">Cases Tracked</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">89.5%</div>
+        <div class="stat-label">Model Accuracy</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">5</div>
+        <div class="stat-label">Diseases Monitored</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function togglePw() {
+      const f = document.getElementById('pw-field');
+      f.type = f.type === 'password' ? 'text' : 'password';
+    }
+  </script>
+
 </body>
 </html>

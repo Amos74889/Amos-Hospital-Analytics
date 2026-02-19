@@ -1,870 +1,625 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Amos Hospital Analytics</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg: #0A0C10;
-      --surface: #111318;
-      --surface2: #1A1D24;
-      --border: #2A2D36;
-      --text: #E8EAF0;
-      --text-muted: #6B7280;
-      --primary: #3B82F6;
-      --primary-light: #1E2A45;
-      --green: #10B981;
-      --green-light: #0D2A1F;
-      --orange: #F97316;
-      --orange-light: #2A1A0A;
-      --red: #EF4444;
-      --red-light: #2A0F0F;
-      --purple: #8B5CF6;
-      --purple-light: #1E1A2E;
-      --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.3);
-      --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
-      --radius: 14px;
-      --radius-sm: 8px;
+      --bg: #0A0C10; --surface: #111318; --surface2: #1A1D24; --border: #2A2D36;
+      --text: #E8EAF0; --text-muted: #6B7280;
+      --primary: #3B82F6; --primary-light: #1E2A45;
+      --green: #10B981; --green-light: #0D2A1F;
+      --orange: #F97316; --red: #EF4444; --purple: #8B5CF6;
+      --sidebar-w: 240px; --sidebar-col: 68px;
+      --radius: 14px; --radius-sm: 8px;
+      --shadow: 0 2px 8px rgba(0,0,0,0.4);
     }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
 
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
+    /* SIDEBAR */
+    .sidebar {
+      width: var(--sidebar-w); background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 200;
+      display: flex; flex-direction: column;
+      transition: width 0.25s ease; overflow: hidden;
     }
+    .sidebar.col { width: var(--sidebar-col); }
 
-    /* ── TOPBAR ── */
+    .sb-logo {
+      padding: 18px 14px; display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid var(--border); min-height: 64px;
+    }
+    .sb-logo-icon {
+      width: 36px; height: 36px; background: linear-gradient(135deg,#3B82F6,#8B5CF6);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .sb-logo-text { font-family:'DM Serif Display',serif; font-size:14px; white-space:nowrap; transition:opacity 0.2s; }
+    .sidebar.col .sb-logo-text { opacity:0; width:0; overflow:hidden; }
+
+    .sb-section { padding: 10px 8px 4px; }
+    .sb-label {
+      font-size:10px; font-weight:700; color:var(--text-muted);
+      text-transform:uppercase; letter-spacing:1px; padding:0 8px; margin-bottom:4px;
+      white-space:nowrap; transition:opacity 0.2s;
+    }
+    .sidebar.col .sb-label { opacity:0; }
+
+    .sb-item {
+      display:flex; align-items:center; gap:12px;
+      padding:10px 12px; border-radius:var(--radius-sm);
+      cursor:pointer; color:var(--text-muted); font-size:14px; font-weight:500;
+      white-space:nowrap; margin-bottom:2px; transition:background 0.15s, color 0.15s;
+      text-decoration:none; position:relative;
+    }
+    .sb-item:hover { background:var(--surface2); color:var(--text); }
+    .sb-item.active { background:var(--primary-light); color:var(--primary); }
+    .sb-icon { font-size:18px; width:24px; text-align:center; flex-shrink:0; }
+    .sb-txt { transition:opacity 0.2s; overflow:hidden; }
+    .sidebar.col .sb-txt { opacity:0; width:0; }
+    .sb-badge {
+      margin-left:auto; background:var(--red); color:white;
+      font-size:10px; font-weight:700; padding:2px 6px; border-radius:20px; flex-shrink:0;
+    }
+    .sidebar.col .sb-badge { display:none; }
+
+    .sb-bottom { margin-top:auto; border-top:1px solid var(--border); padding:10px 8px; }
+    .sb-user { display:flex; align-items:center; gap:10px; padding:8px 12px; }
+    .sb-avatar {
+      width:32px; height:32px; background:var(--primary); border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:700; font-size:13px; flex-shrink:0;
+    }
+    .sb-userinfo { transition:opacity 0.2s; overflow:hidden; }
+    .sidebar.col .sb-userinfo { opacity:0; width:0; }
+    .sb-username { font-size:13px; font-weight:600; white-space:nowrap; }
+    .sb-role { font-size:11px; color:var(--text-muted); }
+
+    .sb-toggle {
+      display:flex; align-items:center; gap:12px; padding:10px 12px;
+      border-radius:var(--radius-sm); cursor:pointer; color:var(--text-muted);
+      font-size:14px; transition:background 0.15s; white-space:nowrap;
+    }
+    .sb-toggle:hover { background:var(--surface2); color:var(--text); }
+    .sidebar.col .sb-toggle-txt { opacity:0; width:0; overflow:hidden; transition:opacity 0.2s; }
+
+    /* MAIN */
+    .main { margin-left:var(--sidebar-w); flex:1; display:flex; flex-direction:column; transition:margin-left 0.25s; }
+    .main.col { margin-left:var(--sidebar-col); }
+
+    /* TOPBAR */
     .topbar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 28px;
-      height: 62px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      box-shadow: 0 1px 4px rgba(26,35,64,0.06);
+      background:var(--surface); border-bottom:1px solid var(--border);
+      padding:0 24px; height:64px; display:flex; align-items:center;
+      justify-content:space-between; position:sticky; top:0; z-index:100;
     }
-
-    .topbar-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .logo-icon {
-      width: 36px; height: 36px;
-      background: var(--primary);
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      color: white; font-size: 18px;
-    }
-
-    .logo-text {
-      font-family: 'DM Serif Display', serif;
-      font-size: 17px;
-      color: var(--text);
-      letter-spacing: -0.3px;
-    }
-
-    .topbar-right {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .upload-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--primary);
-      color: white;
-      border: none;
-      border-radius: var(--radius-sm);
-      padding: 8px 18px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    .upload-btn:hover { background: #1344b8; }
-
+    .page-title { font-size:18px; font-weight:700; }
+    .page-sub { font-size:12px; color:var(--text-muted); margin-top:1px; }
+    .topbar-right { display:flex; align-items:center; gap:10px; }
     .icon-btn {
-      width: 36px; height: 36px;
-      border-radius: 50%;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      color: var(--text-muted);
-      font-size: 16px;
-      transition: background 0.2s;
+      width:36px; height:36px; border-radius:50%; border:1px solid var(--border);
+      background:var(--surface); cursor:pointer; display:flex; align-items:center;
+      justify-content:center; color:var(--text-muted); font-size:16px;
+      text-decoration:none; transition:background 0.2s;
     }
-    .icon-btn:hover { background: var(--bg); }
+    .icon-btn:hover { background:var(--surface2); }
 
-    .avatar {
-      width: 36px; height: 36px;
-      border-radius: 50%;
-      background: var(--primary);
-      color: white;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 14px;
-      cursor: pointer;
-    }
-
-    /* ── UPLOAD BAR ── */
+    /* UPLOAD BAR */
     .upload-bar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 14px 28px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
+      background:var(--surface); border-bottom:1px solid var(--border);
+      padding:12px 24px; display:flex; align-items:center; gap:12px;
     }
-
-    .file-input-wrap {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 8px 14px;
-      flex: 1;
-      max-width: 380px;
+    .file-wrap {
+      display:flex; align-items:center; gap:8px;
+      background:var(--surface2); border:1px solid var(--border);
+      border-radius:var(--radius-sm); padding:7px 12px;
+      flex:1; max-width:340px;
     }
-
-    .file-input-wrap input[type="file"] { display: none; }
-    .file-label {
-      font-size: 13px;
-      color: var(--text-muted);
-      cursor: pointer;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
+    .file-wrap input[type=file] { display:none; }
     .choose-btn {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 5px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text);
-      cursor: pointer;
-      white-space: nowrap;
+      background:var(--surface); border:1px solid var(--border); border-radius:6px;
+      padding:4px 10px; font-size:12px; font-weight:600; color:var(--text); cursor:pointer;
     }
-
-    .date-range {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 8px 14px;
-      font-size: 13px;
-      color: var(--text-muted);
+    .file-lbl { font-size:12px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .date-tag {
+      display:flex; align-items:center; gap:6px;
+      background:var(--surface2); border:1px solid var(--border);
+      border-radius:var(--radius-sm); padding:7px 12px; font-size:12px; color:var(--text-muted);
     }
-
     .run-btn {
-      background: var(--green);
-      color: white;
-      border: none;
-      border-radius: var(--radius-sm);
-      padding: 9px 24px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      margin-left: auto;
-      transition: background 0.2s;
+      background:var(--green); color:white; border:none; border-radius:var(--radius-sm);
+      padding:9px 20px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700;
+      cursor:pointer; margin-left:auto; transition:background 0.2s;
     }
-    .run-btn:hover { background: #0b8a5e; }
+    .run-btn:hover { background:#059669; }
 
-    /* ── MAIN ── */
-    .main {
-      padding: 24px 28px;
-      display: flex;
-      flex-direction: column;
-      gap: 22px;
-    }
+    /* CONTENT */
+    .content { padding:24px; display:flex; flex-direction:column; gap:20px; }
+    .section { display:none; flex-direction:column; gap:20px; }
+    .section.active { display:flex; }
 
-    /* ── KPI CARDS ── */
-    .kpi-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-    }
+    /* CARDS */
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; box-shadow:var(--shadow); }
+    .card-title { font-size:15px; font-weight:700; margin-bottom:4px; }
+    .card-sub { font-size:12px; color:var(--text-muted); margin-bottom:16px; }
 
+    /* KPI */
+    .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; }
     .kpi-card {
-      background: var(--surface);
-      border-radius: var(--radius);
-      padding: 20px 22px;
-      box-shadow: var(--shadow);
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      border: 1px solid var(--border);
-      transition: box-shadow 0.2s;
+      background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+      padding:18px; display:flex; align-items:center; gap:14px; box-shadow:var(--shadow);
+      transition:border-color 0.2s;
     }
-    .kpi-card:hover { box-shadow: var(--shadow-lg); }
+    .kpi-card:hover { border-color:var(--primary); }
+    .kpi-ico { width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+    .ico-blue { background:#1E2A45; } .ico-green { background:#0D2A1F; }
+    .ico-orange { background:#2A1A0A; } .ico-purple { background:#1E1A2E; }
+    .kpi-lbl { font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; }
+    .kpi-val { font-size:24px; font-weight:700; line-height:1; }
+    .kpi-sub2 { font-size:11px; margin-top:4px; }
+    .badge { padding:2px 8px; border-radius:20px; font-size:11px; font-weight:600; }
+    .badge-g { background:var(--green-light); color:var(--green); }
+    .badge-b { background:var(--primary-light); color:var(--primary); }
 
-    .kpi-icon {
-      width: 48px; height: 48px;
-      border-radius: 12px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 22px;
-      flex-shrink: 0;
+    /* GRIDS */
+    .g2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+    .g73 { display:grid; grid-template-columns:1.8fr 1fr; gap:16px; }
+
+    /* METRIC BOX */
+    .mbox { background:var(--surface2); border-radius:10px; padding:14px; text-align:center; }
+    .mval { font-size:22px; font-weight:700; }
+    .mlbl { font-size:11px; color:var(--text-muted); margin-top:4px; }
+
+    /* TABLE */
+    .tbl { width:100%; border-collapse:collapse; }
+    .tbl th { text-align:left; font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; padding:8px 12px; border-bottom:1px solid var(--border); }
+    .tbl td { padding:12px; font-size:13px; border-bottom:1px solid var(--border); }
+    .tbl tr:last-child td { border-bottom:none; }
+    .tbl tr:hover td { background:var(--surface2); }
+    .rnk { width:24px; height:24px; border-radius:6px; background:var(--surface2); display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--text-muted); }
+    .rnk-1 { background:#2A2000; color:#F59E0B; } .rnk-2 { background:#1E1E1E; color:#9CA3AF; } .rnk-3 { background:#2A1500; color:#FB923C; }
+    .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; }
+    .btr { width:60px; height:5px; background:var(--border); border-radius:3px; overflow:hidden; display:inline-block; vertical-align:middle; }
+    .bfill { height:100%; border-radius:3px; }
+
+    /* ALERTS */
+    .alert { border-radius:10px; padding:12px 16px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+    .alert-d { background:#2A0F0F; border:1px solid var(--red); color:var(--red); }
+    .alert-w { background:#2A1A0A; border:1px solid var(--orange); color:var(--orange); }
+    .alert-i { background:var(--primary-light); border:1px solid var(--primary); color:var(--primary); }
+
+    /* REPORT CARDS */
+    .rep-card {
+      background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+      padding:20px; display:flex; align-items:center; gap:16px;
+      text-decoration:none; color:var(--text); cursor:pointer;
+      transition:border-color 0.2s, box-shadow 0.2s;
     }
+    .rep-card:hover { border-color:var(--primary); box-shadow:0 0 0 1px var(--primary); }
+    .rep-ico { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
 
-    .kpi-info { flex: 1; }
-    .kpi-label { font-size: 12px; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .kpi-value { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; }
-    .kpi-sub { font-size: 12px; margin-top: 4px; font-weight: 500; }
+    /* AI */
+    .ai-panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+    .ai-head { padding:16px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+    .ai-ico { width:34px; height:34px; background:linear-gradient(135deg,#3B82F6,#7C3AED); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:16px; }
+    .ai-btn { display:flex; align-items:center; gap:8px; background:linear-gradient(135deg,#3B82F6,#7C3AED); color:white; border:none; border-radius:var(--radius-sm); padding:8px 16px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:700; cursor:pointer; }
+    .ai-btn:hover { opacity:0.88; }
+    .ai-body { padding:20px; min-height:80px; }
+    .ai-result { font-size:14px; line-height:1.7; white-space:pre-wrap; }
+    .ai-result h3 { font-size:14px; font-weight:700; color:var(--primary); margin:14px 0 6px; }
 
-    .kpi-blue .kpi-icon { background: var(--primary-light); color: var(--primary); }
-    .kpi-green .kpi-icon { background: var(--green-light); color: var(--green); }
-    .kpi-orange .kpi-icon { background: var(--orange-light); color: var(--orange); }
-    .kpi-purple .kpi-icon { background: var(--purple-light); color: var(--purple); }
+    .flash { background:#2A1F00; border:1px solid #4A3800; color:#FCD34D; border-radius:var(--radius-sm); padding:10px 16px; font-size:13px; }
+    .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,0.3); border-top-color:white; border-radius:50%; animation:spin 0.7s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
-    .badge-up { color: var(--green); background: var(--green-light); padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-    .badge-info { color: var(--primary); background: var(--primary-light); padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-
-    /* ── GRID ── */
-    .content-grid {
-      display: grid;
-      grid-template-columns: 1fr 340px;
-      gap: 20px;
-    }
-
-    .left-col { display: flex; flex-direction: column; gap: 20px; }
-    .right-col { display: flex; flex-direction: column; gap: 20px; }
-
-    /* ── CARD ── */
-    .card {
-      background: var(--surface);
-      border-radius: var(--radius);
-      padding: 22px;
-      box-shadow: var(--shadow);
-      border: 1px solid var(--border);
-    }
-
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 6px;
-    }
-
-    .card-title {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .card-subtitle {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-bottom: 16px;
-    }
-
-    .view-all {
-      font-size: 13px;
-      color: var(--primary);
-      font-weight: 600;
-      text-decoration: none;
-      display: flex; align-items: center; gap: 4px;
-    }
-
-    /* ── CHART ── */
-    #trend-chart { width: 100%; height: 280px; }
-
-    /* ── TABLE ── */
-    .disease-table { width: 100%; border-collapse: collapse; }
-    .disease-table th {
-      text-align: left;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .disease-table td {
-      padding: 12px 12px;
-      font-size: 14px;
-      border-bottom: 1px solid var(--border);
-    }
-    .disease-table tr:last-child td { border-bottom: none; }
-    .disease-table tr:hover td { background: var(--surface2); }
-
-    .rank-badge {
-      width: 24px; height: 24px;
-      border-radius: 6px;
-      background: var(--surface2);
-      display: inline-flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 700; color: var(--text-muted);
-    }
-    .rank-1 { background: #2A2000; color: #F59E0B; }
-    .rank-2 { background: #1E1E1E; color: #9CA3AF; }
-    .rank-3 { background: #2A1500; color: #FB923C; }
-
-    .disease-dot {
-      display: inline-block;
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      margin-right: 8px;
-    }
-
-    .bar-wrap { display: flex; align-items: center; gap: 10px; }
-    .bar-track {
-      width: 60px; height: 5px;
-      background: var(--border);
-      border-radius: 3px;
-      overflow: hidden;
-    }
-    .bar-fill { height: 100%; border-radius: 3px; }
-
-    .pct-text { font-size: 13px; font-weight: 600; color: var(--text-muted); }
-
-    /* ── DONUT CARD ── */
-    .donut-wrap { display: flex; align-items: center; gap: 20px; }
-    #dist-chart { width: 160px; height: 160px; flex-shrink: 0; }
-
-    .legend-list { flex: 1; display: flex; flex-direction: column; gap: 10px; }
-    .legend-item { display: flex; align-items: center; justify-content: space-between; }
-    .legend-label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-    .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
-    .legend-pct { font-size: 14px; font-weight: 700; }
-
-    /* ── PREDICTED CARD ── */
-    .pred-wrap { display: flex; align-items: center; gap: 20px; }
-    #pred-chart { width: 140px; height: 140px; flex-shrink: 0; }
-    .pred-stats { flex: 1; }
-    .pred-row { margin-bottom: 12px; }
-    .pred-num { font-size: 22px; font-weight: 700; }
-    .pred-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-    .accuracy-badge {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: var(--green-light); color: var(--green);
-      padding: 3px 10px; border-radius: 20px;
-      font-size: 12px; font-weight: 700;
-    }
-
-    /* ── AI PANEL ── */
-    .ai-panel {
-      background: var(--surface);
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-
-    .ai-header {
-      padding: 16px 22px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .ai-title-wrap { display: flex; align-items: center; gap: 10px; }
-    .ai-icon {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, #1A56DB, #7C3AED);
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px;
-    }
-    .ai-title { font-size: 15px; font-weight: 700; }
-    .ai-subtitle { font-size: 11px; color: var(--text-muted); }
-
-    .ai-btn {
-      display: flex; align-items: center; gap: 8px;
-      background: linear-gradient(135deg, #1A56DB, #7C3AED);
-      color: white; border: none;
-      border-radius: var(--radius-sm);
-      padding: 9px 18px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 13px; font-weight: 700;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-    .ai-btn:hover { opacity: 0.88; }
-
-    .ai-body { padding: 20px 22px; min-height: 80px; }
-
-    .ai-placeholder {
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 14px;
-      padding: 20px 0;
-    }
-
-    .ai-result {
-      font-size: 14px;
-      line-height: 1.7;
-      color: var(--text);
-      white-space: pre-wrap;
-    }
-
-    .ai-result h3 {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--primary);
-      margin: 14px 0 6px;
-    }
-
-    .spinner {
-      display: inline-block;
-      width: 18px; height: 18px;
-      border: 2px solid rgba(255,255,255,0.4);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .flash-msg {
-      background: #2A1F00;
-      border: 1px solid #4A3800;
-      color: #FCD34D;
-      border-radius: var(--radius-sm);
-      padding: 10px 16px;
-      font-size: 13px;
-      margin-bottom: 16px;
-    }
-
-    /* ── REPORT BTN ── */
-    .report-btn {
-      display: flex; align-items: center; gap: 8px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 8px 16px;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 13px; font-weight: 600;
-      color: var(--text);
-      cursor: pointer;
-      text-decoration: none;
-      transition: background 0.2s;
-    }
-    .report-btn:hover { background: var(--bg); }
-
-    @media (max-width: 1100px) {
-      .kpi-row { grid-template-columns: repeat(2, 1fr); }
-      .content-grid { grid-template-columns: 1fr; }
+    @media (max-width:1024px) {
+      .kpi-grid { grid-template-columns:repeat(2,1fr); }
+      .g73, .g2 { grid-template-columns:1fr; }
     }
   </style>
 </head>
 <body>
 
-<!-- TOPBAR -->
-<header class="topbar">
-  <div class="topbar-left">
-    <div class="logo-icon">🏥</div>
-    <span class="logo-text">Amos Hospital Analytics</span>
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sb">
+  <div class="sb-logo">
+    <div class="sb-logo-icon">🏥</div>
+    <span class="sb-logo-text">Amos Analytics</span>
   </div>
-  <div class="topbar-right">
-    <a href="/generate-report" class="report-btn">📄 Export Report</a>
-    <div class="icon-btn" title="Notifications">🔔</div>
-    <div class="icon-btn" title="Users">👥</div>
-    <div class="icon-btn" title="Settings">⚙️</div>
-    <div class="avatar" title="{{ username }}">{{ username[0]|upper }}</div>
-    <a href="/logout" style="font-size:13px; color:var(--text-muted); text-decoration:none; font-weight:500;">Logout</a>
-  </div>
-</header>
 
-<!-- UPLOAD BAR -->
-<div class="upload-bar">
-  <form method="POST" enctype="multipart/form-data" style="display:flex;align-items:center;gap:14px;width:100%;" id="upload-form">
-    <div class="file-input-wrap">
-      <label class="choose-btn" for="csv-file">Choose file</label>
-      <input type="file" name="file" id="csv-file" accept=".csv" onchange="document.getElementById('file-label').textContent = this.files[0]?.name || 'No file chosen'"/>
-      <span class="file-label" id="file-label">
-        {% if date_range %}{{ date_range }}{% else %}No file chosen{% endif %}
-      </span>
+  <div class="sb-section">
+    <div class="sb-label">Main</div>
+    <div class="sb-item active" onclick="show('overview',this)">
+      <span class="sb-icon">🏠</span><span class="sb-txt">Overview</span>
     </div>
-    {% if date_range %}
-    <div class="date-range">
-      📅 {{ date_range }}
+    <div class="sb-item" onclick="show('analytics',this)">
+      <span class="sb-icon">📊</span><span class="sb-txt">Disease Analytics</span>
     </div>
-    {% endif %}
-    <button type="submit" class="run-btn">▶ Run Models</button>
-  </form>
-</div>
+    <div class="sb-item" onclick="show('admissions',this)">
+      <span class="sb-icon">🏥</span><span class="sb-txt">Patient Admissions</span>
+      {% if alerts %}<span class="sb-badge">{{ alerts|length }}</span>{% endif %}
+    </div>
+    <div class="sb-item" onclick="show('models',this)">
+      <span class="sb-icon">🤖</span><span class="sb-txt">ML Models</span>
+    </div>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-label">Reports</div>
+    <div class="sb-item" onclick="show('reports',this)">
+      <span class="sb-icon">📄</span><span class="sb-txt">Export Reports</span>
+    </div>
+    <div class="sb-item" onclick="show('ai',this)">
+      <span class="sb-icon">✨</span><span class="sb-txt">AI Insights</span>
+    </div>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-label">System</div>
+    <a class="sb-item" href="/logout">
+      <span class="sb-icon">🚪</span><span class="sb-txt">Logout</span>
+    </a>
+  </div>
+
+  <div class="sb-bottom">
+    <div class="sb-user">
+      <div class="sb-avatar">{{ username[0]|upper }}</div>
+      <div class="sb-userinfo">
+        <div class="sb-username">{{ username }}</div>
+        <div class="sb-role">Administrator</div>
+      </div>
+    </div>
+    <div class="sb-toggle" onclick="toggleSB()">
+      <span class="sb-icon" id="toggle-icon">◀</span>
+      <span class="sb-toggle-txt">Collapse</span>
+    </div>
+  </div>
+</aside>
 
 <!-- MAIN -->
-<main class="main">
+<div class="main" id="main">
 
-  {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      {% for msg in messages %}
-        <div class="flash-msg">⚠️ {{ msg }}</div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div>
+      <div class="page-title" id="page-title">Overview</div>
+      <div class="page-sub">{% if date_range %}{{ date_range }}{% else %}No data uploaded{% endif %}</div>
+    </div>
+    <div class="topbar-right">
+      <a href="/generate-report" class="icon-btn" title="Export">📄</a>
+      <div class="icon-btn">🔔</div>
+      <div class="icon-btn">⚙️</div>
+      <div class="sb-avatar" style="width:36px;height:36px;font-size:13px;">{{ username[0]|upper }}</div>
+    </div>
+  </header>
 
-  {% if message %}
-    <div class="ai-panel" style="padding:40px; text-align:center; color:var(--text-muted);">
-      <div style="font-size:40px; margin-bottom:12px;">📂</div>
-      <div style="font-size:16px; font-weight:600;">No data uploaded yet</div>
-      <div style="font-size:13px; margin-top:6px;">Upload a CSV file above to get started</div>
-    </div>
-  {% else %}
-
-  <!-- SURGE ALERTS -->
-  {% if alerts %}
-  <div style="display:flex;flex-direction:column;gap:8px;">
-    {% for alert in alerts %}
-    <div style="background:{% if alert.type == 'danger' %}#2A0F0F{% else %}#2A1A0A{% endif %};border:1px solid {% if alert.type == 'danger' %}#EF4444{% else %}#F97316{% endif %};border-radius:10px;padding:12px 18px;color:{% if alert.type == 'danger' %}#EF4444{% else %}#F97316{% endif %};font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px;">
-      {% if alert.type == 'danger' %}🚨{% else %}⚡{% endif %} {{ alert.message }}
-      <span style="margin-left:auto;font-size:12px;opacity:0.7;">Current: {{ alert.value }} | Avg: {{ alert.mean }}</span>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
-
-  <!-- KPI CARDS -->
-  <div class="kpi-row">
-    <div class="kpi-card kpi-blue">
-      <div class="kpi-icon">📊</div>
-      <div class="kpi-info">
-        <div class="kpi-label">Total Cases</div>
-        <div class="kpi-value">{{ total_cases }}</div>
-        <div class="kpi-sub"><span class="badge-up">↑ Active</span></div>
+  <!-- UPLOAD BAR -->
+  <div class="upload-bar">
+    <form method="POST" enctype="multipart/form-data" style="display:flex;align-items:center;gap:12px;width:100%;">
+      <div class="file-wrap">
+        <label class="choose-btn" for="csv">📂 Choose</label>
+        <input type="file" name="file" id="csv" accept=".csv" onchange="document.getElementById('flbl').textContent=this.files[0]?.name||'No file'"/>
+        <span class="file-lbl" id="flbl">{% if date_range %}{{ date_range }}{% else %}No file chosen{% endif %}</span>
       </div>
-    </div>
-    <div class="kpi-card kpi-orange">
-      <div class="kpi-icon">🔥</div>
-      <div class="kpi-info">
-        <div class="kpi-label">Highest Disease</div>
-        <div class="kpi-value" style="font-size:18px;">{{ top_disease }}</div>
-        <div class="kpi-sub" style="color:var(--orange);">Top burden</div>
-      </div>
-    </div>
-    <div class="kpi-card kpi-green">
-      <div class="kpi-icon">📅</div>
-      <div class="kpi-info">
-        <div class="kpi-label">Peak Month</div>
-        <div class="kpi-value" style="font-size:20px;">{{ peak_month }}</div>
-        <div class="kpi-sub"><span class="badge-up">+{{ peak_month_pct }}%</span></div>
-      </div>
-    </div>
-    <div class="kpi-card kpi-purple">
-      <div class="kpi-icon">🤖</div>
-      <div class="kpi-info">
-        <div class="kpi-label">RF Predicted Cases</div>
-        <div class="kpi-value" style="font-size:20px;">{{ predicted_total }}</div>
-        <div class="kpi-sub"><span class="badge-info">R²: {{ rf_r2 }}%</span></div>
-      </div>
-    </div>
+      {% if date_range %}<div class="date-tag">📅 {{ date_range }}</div>{% endif %}
+      <button type="submit" class="run-btn">▶ Run Models</button>
+    </form>
   </div>
 
-  <!-- MODEL METRICS -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-    <div class="card">
-      <div class="card-title" style="margin-bottom:16px;">🌲 Random Forest Model</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;">
-        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
-          <div style="font-size:22px;font-weight:700;color:var(--primary);">{{ rf_mae }}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">MAE</div>
-        </div>
-        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
-          <div style="font-size:22px;font-weight:700;color:var(--orange);">{{ rf_rmse }}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">RMSE</div>
-        </div>
-        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
-          <div style="font-size:22px;font-weight:700;color:var(--green);">{{ rf_r2 }}%</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">R²</div>
-        </div>
-      </div>
+  <!-- CONTENT -->
+  <div class="content">
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}{% for msg in messages %}<div class="flash">⚠️ {{ msg }}</div>{% endfor %}{% endif %}
+    {% endwith %}
+
+    {% if message %}
+    <div class="card" style="text-align:center;padding:60px;">
+      <div style="font-size:48px;margin-bottom:16px;">📂</div>
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px;">No Data Uploaded Yet</div>
+      <div style="color:var(--text-muted);font-size:14px;">Upload a CSV file above to start analyzing</div>
     </div>
-    <div class="card">
-      <div class="card-title" style="margin-bottom:16px;">📈 ARIMA Model</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center;">
-        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
-          <div style="font-size:22px;font-weight:700;color:var(--primary);">{{ arima_mae }}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">MAE</div>
+    {% else %}
+
+    <!-- ===== OVERVIEW ===== -->
+    <div class="section active" id="s-overview">
+
+      {% if alerts %}
+      <div>{% for a in alerts %}
+        <div class="alert {% if a.type=='danger' %}alert-d{% else %}alert-w{% endif %}">
+          {% if a.type=='danger' %}🚨{% else %}⚡{% endif %} {{ a.message }}
+          <span style="margin-left:auto;font-size:12px;opacity:0.7;">Now: {{ a.value }} | Avg: {{ a.mean }}</span>
         </div>
-        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
-          <div style="font-size:22px;font-weight:700;color:var(--orange);">{{ arima_rmse }}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">RMSE</div>
-        </div>
-        <div style="background:var(--surface2);border-radius:10px;padding:14px;">
-          <div style="font-size:20px;font-weight:700;color:var(--green);">
-            {% if arima_forecast %}{{ arima_forecast[0]|int }}{% else %}N/A{% endif %}
-          </div>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Next Month</div>
-        </div>
-      </div>
-      {% if arima_forecast %}
-      <div style="margin-top:12px;font-size:12px;color:var(--text-muted);text-align:center;">
-        3-Month Forecast: {% for f in arima_forecast %}<span style="color:var(--text);font-weight:600;">{{ f|int }}</span>{% if not loop.last %} → {% endif %}{% endfor %}
-      </div>
+      {% endfor %}</div>
       {% endif %}
-    </div>
-  </div>
 
-  <!-- CONTENT GRID -->
-  <div class="content-grid">
-
-    <!-- LEFT -->
-    <div class="left-col">
-
-      <!-- TREND CHART -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Disease Trends in Kenya</div>
-          </div>
-        </div>
-        <div class="card-subtitle">An analysis of the most common disease trends reported — {{ date_range }}</div>
-        <div id="trend-chart" style="width:100%;height:300px;"></div>
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-ico ico-blue">📊</div><div><div class="kpi-lbl">Total Cases</div><div class="kpi-val">{{ total_cases }}</div><div class="kpi-sub2"><span class="badge badge-g">↑ Active</span></div></div></div>
+        <div class="kpi-card"><div class="kpi-ico ico-orange">🔥</div><div><div class="kpi-lbl">Highest Disease</div><div class="kpi-val" style="font-size:15px;margin-top:3px;">{{ top_disease }}</div><div class="kpi-sub2" style="color:var(--orange);font-size:11px;">Top burden</div></div></div>
+        <div class="kpi-card"><div class="kpi-ico ico-green">📅</div><div><div class="kpi-lbl">Peak Month</div><div class="kpi-val" style="font-size:18px;">{{ peak_month }}</div><div class="kpi-sub2"><span class="badge badge-g">+{{ peak_month_pct }}%</span></div></div></div>
+        <div class="kpi-card"><div class="kpi-ico ico-purple">🤖</div><div><div class="kpi-lbl">RF Predicted</div><div class="kpi-val" style="font-size:18px;">{{ predicted_total }}</div><div class="kpi-sub2"><span class="badge badge-b">R²: {{ rf_r2 }}%</span></div></div></div>
       </div>
 
-      <!-- DISEASE TABLE -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Top Disease Trends</div>
-          <a href="#" class="view-all">View All →</a>
+      <div class="g73">
+        <div class="card">
+          <div class="card-title">Disease Trends in Kenya</div>
+          <div class="card-sub">{{ date_range }}</div>
+          <div id="chart-trend" style="width:100%;height:280px;"></div>
         </div>
-        <table class="disease-table">
-          <thead>
-            <tr>
-              <th>Rank</th>
-              <th>Disease</th>
-              <th>Total Cases</th>
-              <th>Percentage</th>
-            </tr>
-          </thead>
+        <div class="card">
+          <div class="card-title" style="margin-bottom:14px;">Case Distribution</div>
+          <div id="chart-donut" style="width:100%;height:150px;"></div>
+          <div style="margin-top:12px;">
+            {% set clrs=['#3B82F6','#10B981','#F97316','#8B5CF6','#EF4444'] %}
+            {% for item in case_distribution %}
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:{{ clrs[loop.index0%5] }}"></span>
+                <span style="font-size:12px;color:var(--text-muted);">{{ item.metric }}</span>
+              </div>
+              <span style="font-size:13px;font-weight:700;">{{ item.pct }}%</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== DISEASE ANALYTICS ===== -->
+    <div class="section" id="s-analytics">
+      <div class="card">
+        <div class="card-title">Top Disease Trends</div>
+        <div class="card-sub">Ranked by total cases — {{ date_range }}</div>
+        <table class="tbl">
+          <thead><tr><th>Rank</th><th>Disease</th><th>Cases</th><th>%</th><th>Bar</th></tr></thead>
           <tbody>
-            {% set colors = ['#1A56DB','#0EA472','#F97316','#8B5CF6','#EF4444'] %}
+            {% set clrs=['#3B82F6','#10B981','#F97316','#8B5CF6','#EF4444'] %}
             {% for item in case_distribution %}
             <tr>
-              <td><span class="rank-badge rank-{{ loop.index }}">{{ loop.index }}</span></td>
-              <td>
-                <span class="disease-dot" style="background:{{ colors[loop.index0 % colors|length] }}"></span>
-                {{ item.metric }}
-              </td>
-              <td>
-                <div class="bar-wrap">
-                  <strong>{{ "{:,}".format(item.total) }}</strong>
-                  <div class="bar-track">
-                    <div class="bar-fill" style="width:{{ item.pct }}%; background:{{ colors[loop.index0 % colors|length] }};"></div>
-                  </div>
-                </div>
-              </td>
-              <td><span class="pct-text">{{ item.pct }}%</span></td>
+              <td><span class="rnk rnk-{{ loop.index }}">{{ loop.index }}</span></td>
+              <td><span class="dot" style="background:{{ clrs[loop.index0%5] }}"></span>{{ item.metric }}</td>
+              <td><strong>{{ "{:,}".format(item.total) }}</strong></td>
+              <td style="color:var(--text-muted);">{{ item.pct }}%</td>
+              <td><div class="btr"><div class="bfill" style="width:{{ item.pct }}%;background:{{ clrs[loop.index0%5] }};"></div></div></td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
-
+      <div class="card">
+        <div class="card-title">Full Trend Chart</div>
+        <div class="card-sub">All diseases over time</div>
+        <div id="chart-trend2" style="width:100%;height:320px;"></div>
+      </div>
     </div>
 
-    <!-- RIGHT -->
-    <div class="right-col">
-
-      <!-- CASE DISTRIBUTION -->
-      <div class="card">
-        <div class="card-title" style="margin-bottom:16px;">Case Distribution</div>
-        <div class="donut-wrap" style="display:flex;align-items:center;gap:16px;">
-          <div id="dist-chart" style="width:140px;height:140px;flex-shrink:0;"></div>
-          <div class="legend-list">
-            {% set colors = ['#3B82F6','#10B981','#F97316','#8B5CF6','#EF4444'] %}
-            {% for item in case_distribution %}
-            <div class="legend-item" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;">
-              <div class="legend-label" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:3px;flex-shrink:0;background:{{ colors[loop.index0 % colors|length] }}"></span>
-                <span style="font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.metric }}</span>
-              </div>
-              <span style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0;">{{ item.pct }}%</span>
-            </div>
-            {% endfor %}
-          </div>
-        </div>
-      </div>
-
-      <!-- PREDICTED vs ACTUAL -->
-      <div class="card">
-        <div class="card-title" style="margin-bottom:16px;">Predicted vs. Actual</div>
-        <div class="pred-wrap">
-          <div id="pred-chart"></div>
-          <div class="pred-stats">
-            <div class="pred-row">
-              <div class="pred-num" style="color:var(--primary);">{{ total_cases }}</div>
-              <div class="pred-sub">Total Cases (Actual)</div>
-            </div>
-            <div class="pred-row">
-              <div class="pred-num" style="color:var(--green);">{{ predicted_total }}</div>
-              <div class="pred-sub">Total Cases (Predicted)</div>
-            </div>
-            <div class="accuracy-badge">✓ {{ rf_r2 }}% Accuracy</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- DATA INSIGHTS -->
-      <div class="card">
-        <div class="card-title" style="margin-bottom:14px;">📊 Data Insights</div>
-        {% set colors = ['#1A56DB','#0EA472','#F97316','#8B5CF6','#EF4444'] %}
-        {% for item in case_distribution %}
-        <div style="margin-bottom:12px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-            <span style="font-size:13px;font-weight:500;">{{ loop.index }}. {{ item.metric }}</span>
-            <span style="font-size:13px;font-weight:700;">{{ item.pct }}%</span>
-          </div>
-          <div class="bar-track" style="width:100%;height:6px;">
-            <div class="bar-fill" style="width:{{ item.pct }}%;background:{{ colors[loop.index0 % colors|length] }};"></div>
-          </div>
+    <!-- ===== PATIENT ADMISSIONS ===== -->
+    <div class="section" id="s-admissions">
+      {% if alerts %}
+        <div class="alert alert-i">ℹ️ {{ alerts|length }} active alert(s) detected</div>
+        {% for a in alerts %}
+        <div class="alert {% if a.type=='danger' %}alert-d{% else %}alert-w{% endif %}">
+          {% if a.type=='danger' %}🚨{% else %}⚡{% endif %} {{ a.message }}
+          <span style="margin-left:auto;font-size:12px;">Current: <strong>{{ a.value }}</strong> | Avg: {{ a.mean }}</span>
         </div>
         {% endfor %}
-      </div>
+      {% else %}
+        <div class="alert alert-i">✅ No surge alerts — all metrics within normal range</div>
+      {% endif %}
 
-    </div>
-  </div>
-
-  <!-- AI PANEL -->
-  <div class="ai-panel">
-    <div class="ai-header">
-      <div class="ai-title-wrap">
-        <div class="ai-icon">🤖</div>
-        <div>
-          <div class="ai-title">AI Analysis</div>
-          <div class="ai-subtitle">Powered by Claude · Get recommendations based on your data</div>
+      <div class="g3">
+        <div class="card" style="text-align:center;">
+          <div style="font-size:28px;font-weight:700;color:var(--primary);">{{ total_cases }}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Total Admissions</div>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div style="font-size:24px;font-weight:700;color:var(--green);">{{ peak_month }}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Peak Month</div>
+        </div>
+        <div class="card" style="text-align:center;">
+          <div style="font-size:18px;font-weight:700;color:var(--orange);margin-top:4px;">{{ top_disease }}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Primary Cause</div>
         </div>
       </div>
-      <button class="ai-btn" onclick="getInsights()" id="ai-btn">
-        ✨ Get AI Insights
-      </button>
-    </div>
-    <div class="ai-body" id="ai-body">
-      <div class="ai-placeholder">Click "Get AI Insights" to generate an AI-powered analysis of your data.</div>
-    </div>
-  </div>
 
-  {% endif %}
-</main>
+      <div class="card">
+        <div class="card-title">Admission Trends</div>
+        <div class="card-sub">Monthly breakdown — {{ date_range }}</div>
+        <div id="chart-admission" style="width:100%;height:300px;"></div>
+      </div>
+    </div>
+
+    <!-- ===== ML MODELS ===== -->
+    <div class="section" id="s-models">
+      <div class="g2">
+        <div class="card">
+          <div class="card-title">🌲 Random Forest</div>
+          <div class="card-sub">Pattern-based regression model</div>
+          <div class="g3" style="gap:10px;">
+            <div class="mbox"><div class="mval" style="color:var(--primary);">{{ rf_mae }}</div><div class="mlbl">MAE</div></div>
+            <div class="mbox"><div class="mval" style="color:var(--orange);">{{ rf_rmse }}</div><div class="mlbl">RMSE</div></div>
+            <div class="mbox"><div class="mval" style="color:var(--green);">{{ rf_r2 }}%</div><div class="mlbl">R²</div></div>
+          </div>
+          <div style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:10px;font-size:13px;color:var(--text-muted);">
+            Predicted Cases: <strong style="color:var(--text);">{{ predicted_total }}</strong>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">📈 ARIMA Model</div>
+          <div class="card-sub">Time-series forecasting model</div>
+          <div class="g3" style="gap:10px;">
+            <div class="mbox"><div class="mval" style="color:var(--primary);">{{ arima_mae }}</div><div class="mlbl">MAE</div></div>
+            <div class="mbox"><div class="mval" style="color:var(--orange);">{{ arima_rmse }}</div><div class="mlbl">RMSE</div></div>
+            <div class="mbox"><div class="mval" style="color:var(--green);">{% if arima_forecast %}{{ arima_forecast[0]|int }}{% else %}N/A{% endif %}</div><div class="mlbl">Next Month</div></div>
+          </div>
+          {% if arima_forecast %}
+          <div style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:10px;font-size:13px;color:var(--text-muted);">
+            3-Month Forecast: {% for f in arima_forecast %}<strong style="color:var(--green);">{{ f|int }}</strong>{% if not loop.last %} → {% endif %}{% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Model Comparison</div>
+        <div class="card-sub">Random Forest vs ARIMA — MAE & RMSE</div>
+        <div id="chart-models" style="width:100%;height:280px;"></div>
+      </div>
+    </div>
+
+    <!-- ===== REPORTS ===== -->
+    <div class="section" id="s-reports">
+      <div class="g2">
+        <a href="/generate-report" class="rep-card">
+          <div class="rep-ico" style="background:#1E2A45;">📄</div>
+          <div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:4px;">Full Analytics Report</div>
+            <div style="font-size:12px;color:var(--text-muted);">Download complete Word doc with all charts, metrics & AI analysis</div>
+          </div>
+          <span style="margin-left:auto;color:var(--primary);font-size:20px;">↗</span>
+        </a>
+        <div class="rep-card" onclick="show('ai',document.querySelectorAll('.sb-item')[5])">
+          <div class="rep-ico" style="background:linear-gradient(135deg,#1E2A45,#1E1A2E);">✨</div>
+          <div>
+            <div style="font-size:15px;font-weight:700;margin-bottom:4px;">AI Insights Report</div>
+            <div style="font-size:12px;color:var(--text-muted);">Claude AI powered analysis with recommendations & forecasts</div>
+          </div>
+          <span style="margin-left:auto;color:var(--purple);font-size:20px;">↗</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:14px;">📊 Data Summary</div>
+        <table class="tbl">
+          <tbody>
+            <tr><td style="color:var(--text-muted);">Date Range</td><td><strong>{{ date_range }}</strong></td></tr>
+            <tr><td style="color:var(--text-muted);">Total Cases</td><td><strong>{{ total_cases }}</strong></td></tr>
+            <tr><td style="color:var(--text-muted);">Peak Month</td><td><strong>{{ peak_month }}</strong></td></tr>
+            <tr><td style="color:var(--text-muted);">Highest Disease</td><td><strong>{{ top_disease }}</strong></td></tr>
+            <tr><td style="color:var(--text-muted);">RF R² Accuracy</td><td><strong>{{ rf_r2 }}%</strong></td></tr>
+            <tr><td style="color:var(--text-muted);">RF MAE</td><td><strong>{{ rf_mae }}</strong></td></tr>
+            <tr><td style="color:var(--text-muted);">RF RMSE</td><td><strong>{{ rf_rmse }}</strong></td></tr>
+            <tr><td style="color:var(--text-muted);">ARIMA MAE</td><td><strong>{{ arima_mae }}</strong></td></tr>
+            <tr><td style="color:var(--text-muted);">ARIMA RMSE</td><td><strong>{{ arima_rmse }}</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ===== AI INSIGHTS ===== -->
+    <div class="section" id="s-ai">
+      <div class="ai-panel">
+        <div class="ai-head">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="ai-ico">🤖</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;">AI Analysis</div>
+              <div style="font-size:11px;color:var(--text-muted);">Powered by Claude</div>
+            </div>
+          </div>
+          <button class="ai-btn" onclick="getAI()" id="ai-btn">✨ Get AI Insights</button>
+        </div>
+        <div class="ai-body" id="ai-body">
+          <div style="text-align:center;color:var(--text-muted);padding:20px;">Click "Get AI Insights" to generate an analysis of your data.</div>
+        </div>
+      </div>
+    </div>
+
+    {% endif %}
+  </div>
+</div>
 
 <script>
-  // ── Trend Chart ──
+  // Sidebar toggle
+  let col = false;
+  function toggleSB() {
+    col = !col;
+    document.getElementById('sb').classList.toggle('col', col);
+    document.getElementById('main').classList.toggle('col', col);
+    document.getElementById('toggle-icon').textContent = col ? '▶' : '◀';
+  }
+
+  // Section navigation
+  const titles = { overview:'Overview', analytics:'Disease Analytics', admissions:'Patient Admissions', models:'ML Models', reports:'Reports & Export', ai:'AI Insights' };
+  function show(name, el) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.sb-item').forEach(n => n.classList.remove('active'));
+    const s = document.getElementById('s-'+name);
+    if (s) s.classList.add('active');
+    if (el) el.classList.add('active');
+    document.getElementById('page-title').textContent = titles[name] || name;
+    if (name==='analytics') setTimeout(renderTrend2, 150);
+    if (name==='admissions') setTimeout(renderAdmission, 150);
+    if (name==='models') setTimeout(renderModels, 150);
+  }
+
+  const layout = {
+    paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)',
+    font:{family:'DM Sans',color:'#E8EAF0',size:12},
+    margin:{l:40,r:20,t:10,b:40},
+    xaxis:{gridcolor:'#2A2D36',showline:false,zeroline:false},
+    yaxis:{gridcolor:'#2A2D36',showline:false,zeroline:false},
+    hovermode:'x unified',
+    legend:{orientation:'h',y:1.1,x:0.5,xanchor:'center'}
+  };
+
   {% if trend_chart %}
-  const trendData = {{ trend_chart|safe }};
-  trendData.layout = Object.assign(trendData.layout || {}, {
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)',
-    font: { family: 'DM Sans, sans-serif', color: '#E8EAF0', size: 12 },
-    margin: { l: 40, r: 20, t: 20, b: 40 },
-    xaxis: { gridcolor: '#2A2D36', showline: false, zeroline: false },
-    yaxis: { gridcolor: '#2A2D36', showline: false, zeroline: false },
-    hovermode: 'x unified',
-    legend: { orientation: 'h', y: 1.12, x: 0.5, xanchor: 'center' },
-    colorway: ['#1A56DB', '#F97316', '#0EA472', '#8B5CF6', '#EF4444']
-  });
-  setTimeout(function() {
-    Plotly.newPlot('trend-chart', trendData.data, trendData.layout, { responsive: true, displayModeBar: false });
-  }, 100);
+  const td = {{ trend_chart|safe }};
+  td.layout = Object.assign(td.layout||{}, layout);
+  setTimeout(() => Plotly.newPlot('chart-trend', td.data, td.layout, {responsive:true,displayModeBar:false}), 150);
+  function renderTrend2() { Plotly.newPlot('chart-trend2', td.data, td.layout, {responsive:true,displayModeBar:false}); }
+  function renderAdmission() { Plotly.newPlot('chart-admission', td.data, td.layout, {responsive:true,displayModeBar:false}); }
   {% endif %}
 
-  // ── Donut Chart ──
   {% if case_distribution %}
-  const distLabels = {{ case_distribution | map(attribute='metric') | list | tojson }};
-  const distValues = {{ case_distribution | map(attribute='total') | list | tojson }};
-  Plotly.newPlot('dist-chart', [{
-    type: 'pie', labels: distLabels, values: distValues,
-    hole: 0.55,
-    marker: { colors: ['#1A56DB','#0EA472','#F97316','#8B5CF6','#EF4444'] },
-    textinfo: 'none',
-    hovertemplate: '%{label}: %{percent}<extra></extra>'
-  }], {
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    margin: { l: 0, r: 0, t: 0, b: 0 },
-    showlegend: false
-  }, { responsive: true, displayModeBar: false });
+  Plotly.newPlot('chart-donut',[{
+    type:'pie',
+    labels:{{ case_distribution|map(attribute='metric')|list|tojson }},
+    values:{{ case_distribution|map(attribute='total')|list|tojson }},
+    hole:0.55, textinfo:'none',
+    marker:{colors:['#3B82F6','#10B981','#F97316','#8B5CF6','#EF4444']},
+    hovertemplate:'%{label}: %{percent}<extra></extra>'
+  }],{paper_bgcolor:'rgba(0,0,0,0)',margin:{l:0,r:0,t:0,b:0},showlegend:false},{responsive:true,displayModeBar:false});
 
-  // ── Accuracy Donut ──
-  const accuracy = {{ rf_r2 }};
-  Plotly.newPlot('pred-chart', [{
-    type: 'pie',
-    values: [accuracy, 100 - accuracy],
-    hole: 0.6,
-    marker: { colors: ['#0EA472', '#E2E8F4'] },
-    textinfo: 'none',
-    hoverinfo: 'skip'
-  }], {
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    margin: { l: 0, r: 0, t: 0, b: 0 },
-    showlegend: false,
-    annotations: [{
-      text: accuracy + '%',
-      x: 0.5, y: 0.5, showarrow: false,
-      font: { size: 16, color: '#E8EAF0', family: 'DM Sans' }
-    }]
-  }, { responsive: true, displayModeBar: false });
+  function renderModels() {
+    Plotly.newPlot('chart-models',[
+      {name:'Random Forest',x:['MAE','RMSE'],y:[{{ rf_mae }},{{ rf_rmse }}],type:'bar',marker:{color:'#3B82F6'}},
+      {name:'ARIMA',x:['MAE','RMSE'],y:[{{ arima_mae }},{{ arima_rmse }}],type:'bar',marker:{color:'#10B981'}}
+    ],Object.assign({},layout,{barmode:'group',margin:{l:40,r:20,t:20,b:40}}),{responsive:true,displayModeBar:false});
+  }
   {% endif %}
 
-  // ── AI Insights ──
-  async function getInsights() {
-    const btn = document.getElementById('ai-btn');
-    const body = document.getElementById('ai-body');
-    btn.innerHTML = '<span class="spinner"></span> Analyzing...';
-    btn.disabled = true;
-    body.innerHTML = '<div class="ai-placeholder">⏳ Claude is analyzing your hospital data...</div>';
-
+  async function getAI() {
+    const btn=document.getElementById('ai-btn'), body=document.getElementById('ai-body');
+    btn.innerHTML='<span class="spinner"></span> Analyzing...'; btn.disabled=true;
+    body.innerHTML='<div style="text-align:center;color:var(--text-muted);padding:20px;">⏳ Claude is analyzing your data...</div>';
     try {
-      const res = await fetch('/ai-insights', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          top_disease: '{{ top_disease }}',
-          total_cases: {{ total_cases|replace(",", "") if total_cases else 0 }},
-          peak_month: '{{ peak_month }}',
-          rf_mae: {{ rf_mae }},
-          rf_rmse: {{ rf_rmse }},
-          rf_r2: {{ rf_r2 }},
-          arima_mae: {{ arima_mae }},
-          arima_rmse: {{ arima_rmse }},
-          arima_forecast: {{ arima_forecast | tojson }},
-          alerts: {{ alerts | tojson }},
-          date_range: '{{ date_range }}',
-          distribution: {{ case_distribution | tojson }}
+      const res=await fetch('/ai-insights',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          top_disease:'{{ top_disease }}',
+          total_cases:{{ total_cases|replace(",","") if total_cases else 0 }},
+          peak_month:'{{ peak_month }}',
+          rf_mae:{{ rf_mae }},rf_rmse:{{ rf_rmse }},rf_r2:{{ rf_r2 }},
+          arima_mae:{{ arima_mae }},arima_rmse:{{ arima_rmse }},
+          arima_forecast:{{ arima_forecast|tojson }},
+          alerts:{{ alerts|tojson }},
+          date_range:'{{ date_range }}',
+          distribution:{{ case_distribution|tojson }}
         })
       });
-
-      const data = await res.json();
-      if (data.success) {
-        let html = data.insights
-          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-          .replace(/^(\d+\. .+)$/gm, '<h3>$1</h3>')
-          .replace(/^- (.+)$/gm, '• $1');
-        body.innerHTML = '<div class="ai-result">' + html + '</div>';
-      } else {
-        body.innerHTML = '<div style="color:#EF4444;font-size:14px;">⚠️ ' + data.error + '</div>';
-      }
-    } catch(e) {
-      body.innerHTML = '<div style="color:#EF4444;font-size:14px;">⚠️ Connection error. Please try again.</div>';
-    }
-
-    btn.innerHTML = '✨ Get AI Insights';
-    btn.disabled = false;
+      const data=await res.json();
+      if(data.success){
+        let html=data.insights.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/^(\d+\. .+)$/gm,'<h3>$1</h3>').replace(/^- (.+)$/gm,'• $1');
+        body.innerHTML='<div class="ai-result">'+html+'</div>';
+      } else { body.innerHTML='<div style="color:var(--red);font-size:14px;">⚠️ '+data.error+'</div>'; }
+    } catch(e) { body.innerHTML='<div style="color:var(--red);font-size:14px;">⚠️ Connection error.</div>'; }
+    btn.innerHTML='✨ Get AI Insights'; btn.disabled=false;
   }
 </script>
-
 </body>
 </html>

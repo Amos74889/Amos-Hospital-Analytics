@@ -14,7 +14,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
 import plotly.graph_objects as go
 import json
-import google.generativeai as genai
+from groq import Groq
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -87,7 +87,6 @@ def load_user(user_id):
 # -------------------------------------------------
 
 def run_migrations():
-    """Automatically add any missing columns to existing tables."""
     try:
         if "sqlite" in database_url:
             import sqlite3
@@ -96,8 +95,8 @@ def run_migrations():
                 db_path = os.path.join(os.path.dirname(__file__), "instance", db_path)
 
             if os.path.exists(db_path):
-                raw    = sqlite3.connect(db_path)
-                cursor = raw.execute("PRAGMA table_info(user)")
+                raw     = sqlite3.connect(db_path)
+                cursor  = raw.execute("PRAGMA table_info(user)")
                 columns = [row[1] for row in cursor.fetchall()]
                 raw.close()
 
@@ -108,7 +107,6 @@ def run_migrations():
                     raw.close()
                     print("✅ Migration: added 'created_at' column to user table.")
         else:
-            # PostgreSQL migration
             from sqlalchemy import text
             with db.engine.connect() as conn:
                 result = conn.execute(text("""
@@ -218,7 +216,6 @@ def run_random_forest(df_grouped, top_disease):
     rmse = round(np.sqrt(mean_squared_error(y, preds)), 2)
     r2   = round(max(r2_score(y, preds) * 100, 0), 1)
 
-    # Predict next 3 months
     future_idx   = pd.DataFrame({"MonthIndex": [len(top_df)+1, len(top_df)+2, len(top_df)+3]})
     future_preds = model.predict(future_idx)
 
@@ -473,8 +470,7 @@ def build_smart_prompt(data, is_full_report=False):
 - SURVEILLANCE: Report unusual patterns to the county disease surveillance officer"""
 
     situation_block = "\n".join(situation_rules) if situation_rules else "  - All metrics within normal range — maintain current protocols"
-
-    rf_fc_text = f"RF 3-Month Forecast: {rf_forecast}" if rf_forecast else ""
+    rf_fc_text      = f"RF 3-Month Forecast: {rf_forecast}" if rf_forecast else ""
 
     sections = f"""1. **Executive Summary** (2-3 sentences of the most critical finding)
 2. **Key Findings** (top 3 data-driven insights)
@@ -494,7 +490,7 @@ def build_smart_prompt(data, is_full_report=False):
 7. **Data Improvements**
 8. **3-Month Forecast**"""
 
-    prompt = f"""You are Dr. Amara Osei, a senior medical data analyst and hospital resource planning expert 
+    prompt = f"""You are Dr. Amara Osei, a senior medical data analyst and hospital resource planning expert
 with 15 years of experience in Kenya's healthcare system, working with the Ministry of Health.
 
 === CURRENT HOSPITAL DATA ===
@@ -540,17 +536,33 @@ STRICT RULES:
 
 
 # -------------------------------------------------
-# HELPER: CALL GEMINI AI
+# HELPER: CALL GROQ AI  ← replaces Gemini
 # -------------------------------------------------
 
-def call_gemini(prompt):
-    api_key = os.environ.get("GEMINI_API_KEY")
+def call_groq(prompt):
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY not set in environment variables")
-    genai.configure(api_key=api_key)
-    model  = genai.GenerativeModel("gemini-2.0-flash")
-    result = model.generate_content(prompt)
-    return result.text
+        raise ValueError("GROQ_API_KEY not set in environment variables")
+
+    client = Groq(api_key=api_key)
+
+    completion = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are Dr. Amara Osei, a senior medical data analyst with 15 years experience in Kenya's healthcare system."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        temperature=0.7,
+        max_tokens=4096,
+    )
+
+    return completion.choices[0].message.content
 
 
 # -------------------------------------------------
@@ -623,7 +635,6 @@ def build_word_report(summary, ai_text):
     style.font.name = "Arial"
     style.font.size = Pt(11)
 
-    # Title
     title_p           = doc.add_paragraph()
     title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run                = title_p.add_run("AMOS HOSPITAL ANALYTICS")
@@ -645,11 +656,10 @@ def build_word_report(summary, ai_text):
 
     gen_p           = doc.add_paragraph()
     gen_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    gen_p.add_run(f"Generated: {datetime.datetime.now().strftime('%B %d, %Y at %H:%M')} | Powered by Gemini AI")
+    gen_p.add_run(f"Generated: {datetime.datetime.now().strftime('%B %d, %Y at %H:%M')} | Powered by Groq AI (Llama 3.3 70B)")
 
     doc.add_paragraph()
 
-    # KPI Table
     h = doc.add_heading("Summary Statistics", level=1)
     h.runs[0].font.color.rgb = RGBColor(0x0D, 0x47, 0xA1)
 
@@ -685,7 +695,6 @@ def build_word_report(summary, ai_text):
 
     doc.add_paragraph()
 
-    # Model Metrics Table
     h2 = doc.add_heading("Model Performance Metrics", level=1)
     h2.runs[0].font.color.rgb = RGBColor(0x0D, 0x47, 0xA1)
 
@@ -719,7 +728,6 @@ def build_word_report(summary, ai_text):
 
     doc.add_paragraph()
 
-    # ARIMA Forecast
     if summary.get("arima_forecast"):
         h_fc = doc.add_heading("3-Month ARIMA Forecast", level=1)
         h_fc.runs[0].font.color.rgb = RGBColor(0x0D, 0x47, 0xA1)
@@ -734,7 +742,6 @@ def build_word_report(summary, ai_text):
 
     doc.add_paragraph()
 
-    # Alerts section
     if summary["alerts"]:
         h3 = doc.add_heading("⚠️ Active Surge Alerts", level=1)
         h3.runs[0].font.color.rgb = RGBColor(0xC6, 0x28, 0x28)
@@ -746,12 +753,11 @@ def build_word_report(summary, ai_text):
 
     doc.add_page_break()
 
-    # AI Analysis
     h4 = doc.add_heading("AI-Powered Analysis & Recommendations", level=1)
     h4.runs[0].font.color.rgb = RGBColor(0x0D, 0x47, 0xA1)
 
     sub = doc.add_paragraph()
-    sub.add_run("Generated by Gemini AI · For administrative use only").italic = True
+    sub.add_run("Generated by Groq AI (Llama 3.3 70B) · For administrative use only").italic = True
     sub.runs[0].font.color.rgb = RGBColor(0x9E, 0x9E, 0x9E)
     sub.runs[0].font.size = Pt(9)
 
@@ -813,7 +819,7 @@ def generate_report():
             "distribution": summary["case_distribution"]
         }, is_full_report=True)
 
-        ai_text  = call_gemini(prompt)
+        ai_text  = call_groq(prompt)
         doc_buf  = build_word_report(summary, ai_text)
         filename = f"Amos_Hospital_Report_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.docx"
 
@@ -856,7 +862,7 @@ def ai_insights():
         }
 
         prompt  = build_smart_prompt(smart_data, is_full_report=False)
-        insight = call_gemini(prompt)
+        insight = call_groq(prompt)
 
         return jsonify({"success": True, "insights": insight})
 
@@ -1072,7 +1078,6 @@ def dashboard():
 
     alerts = detect_surges(df, case_distribution)
 
-    # Trend chart
     colors    = ["#3B82F6", "#F97316", "#10B981", "#EF4444", "#8B5CF6"]
     trend_fig = go.Figure()
     for i, metric in enumerate(df_grouped["metric"].unique()):
@@ -1128,8 +1133,8 @@ def dashboard():
 # -------------------------------------------------
 
 with app.app_context():
-    db.create_all()   # creates tables if they don't exist
-    run_migrations()  # adds any missing columns to existing tables
+    db.create_all()
+    run_migrations()
 
 # -------------------------------------------------
 # RUN
@@ -1137,4 +1142,4 @@ with app.app_context():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)
